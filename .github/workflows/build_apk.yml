@@ -19,30 +19,228 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Pure Rebuild Environment Creation
+      - name: Force Generate App Infrastructure
         run: |
-          # 1. 先將主程式與 K 線網頁存至暫存區
-          mkdir -p /tmp/stock_backup
-          cp lib/main.dart /tmp/stock_backup/main.dart
-          cp assets/chart.html /tmp/stock_backup/chart.html
-
-          # 2. 建立一個全新的、完全乾淨的標準子目錄結構，絕不呼叫刪除指令
-          rm -rf lib assets android pubspec.yaml
+          # 1. 強制清空目前目錄，由官方指令初始化 100% 正確的目錄結構
+          rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 3. 移回剛才備份的核心程式碼
-          mkdir -p assets
-          cp /tmp/stock_backup/main.dart lib/main.dart
-          cp /tmp/stock_backup/chart.html assets/chart.html
+          # 2. 直接在雲端環境強行寫入 App 主程式 (lib/main.dart)
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+          import 'package:webview_flutter/webview_flutter.dart';
 
-          # 4. 強制寫入完美無誤的 pubspec.yaml，明確宣告 WebView 與資產路徑
+          void main() => runApp(const TaiwanStockApp());
+
+          class TaiwanStockApp extends StatelessWidget {
+            const TaiwanStockApp({Key? key}) : super(key: key);
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                theme: ThemeData.dark(),
+                home: const StockChartScreen(),
+              );
+            }
+          }
+
+          class StockChartScreen extends StatefulWidget {
+            const StockChartScreen({Key? key}) : super(key: key);
+            @override
+            _StockChartScreenState createState() => _StockChartScreenState();
+          }
+
+          class _StockChartScreenState extends State<StockChartScreen> {
+            late final WebViewController _webViewController;
+            bool _isDrawingMode = false;
+            String _currentStockId = "2330";
+            String _currentStockName = "台積電";
+
+            final List<Map<String, String>> _stockList = [
+              {"id": "2330", "name": "台積電"},
+              {"id": "2454", "name": "聯發科"},
+              {"id": "2317", "name": "鴻海"},
+              {"id": "2603", "name": "長榮"},
+              {"id": "2882", "name": "國泰金"},
+            ];
+
+            @override
+            void initState() {
+              super.initState();
+              _webViewController = WebViewController()
+                ..setJavaScriptMode(JavaScriptMode.unrestricted)
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onPageFinished: (String url) {
+                      _webViewController.runJavaScript("changeStock('$_currentStockId')");
+                    },
+                  ),
+                )
+                ..loadFlutterAsset('assets/chart.html');
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                appBar: AppBar(title: Text("$_currentStockId $_currentStockName")),
+                drawer: Drawer(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      const DrawerHeader(
+                        decoration: BoxDecoration(color: Color(0xFF131722)),
+                        child: Center(child: Text("台股自選清單", style: TextStyle(fontSize: 18))),
+                      ),
+                      ..._stockList.map((stock) => ListTile(
+                        title: Text(stock['name']!),
+                        subtitle: Text(stock['id']!),
+                        selected: stock['id'] == _currentStockId,
+                        onTap: () {
+                          setState(() {
+                            _currentStockId = stock['id']!;
+                            _currentStockName = stock['name']!;
+                            _isDrawingMode = false;
+                          });
+                          _webViewController.runJavaScript("changeStock('$_currentStockId')");
+                          Navigator.pop(context);
+                        },
+                      )),
+                    ],
+                  ),
+                ),
+                body: Column(
+                  children: [
+                    Expanded(child: WebViewWidget(controller: _webViewController)),
+                    Container(
+                      padding: const EdgeInsets.all(16.0),
+                      color: Colors.black,
+                      child: SafeArea(
+                        child: Row(
+                          children: [
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
+                              onPressed: () {
+                                setState(() { _isDrawingMode = !_isDrawingMode; });
+                                _webViewController.runJavaScript("setDrawingMode($_isDrawingMode, 'line', '#d63031', 2, 'solid', 16)");
+                              },
+                              child: Text(_isDrawingMode ? "關閉畫線" : "開啟畫線"),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  ],
+                ),
+              );
+            }
+          }
+          EOF
+
+          # 3. 建立資產目錄，並在雲端強行寫入技術分析網頁 (assets/chart.html)
+          mkdir -p assets
+          cat << 'EOF' > assets/chart.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+              <script src="https://unpkg.com"></script>
+              <style>
+                  body { margin: 0; padding: 0; background-color: #131722; overflow: hidden; position: relative; }
+                  #chart { width: 100vw; height: 100vh; z-index: 1; }
+                  #drawingCanvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; }
+                  .active-canvas { pointer-events: auto !important; }
+              </style>
+          </head>
+          <body>
+              <div id="chart"></div>
+              <canvas id="drawingCanvas"></canvas>
+              <script>
+                  const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+                      layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
+                      grid: { vertLines: { color: '#2b2b43' }, horzLines: { color: '#2b2b43' } },
+                      timeScale: { borderColor: '#485c7b' }
+                  });
+                  const candlestickSeries = chart.addCandlestickSeries({ upColor: '#ef5350', downColor: '#26a69a' });
+                  const ma5Series = chart.addLineSeries({ color: '#f5cd79', lineWidth: 1 });
+
+                  async function changeStock(stockId) {
+                      const currentYear = new Date().getFullYear();
+                      const url = `https://finmindtrade.com{stockId}&start_date=${currentYear}-01-01`;
+                      try {
+                          const response = await fetch(url);
+                          const resData = await response.json();
+                          const formattedData = resData.data.map(item => ({
+                              time: item.date, open: item.open, high: item.max, low: item.min, close: item.close
+                          }));
+                          candlestickSeries.setData(formattedData);
+                          
+                          let ma5Data = [];
+                          for (let i = 0; i < formattedData.length; i++) {
+                              if (i < 4) continue;
+                              let sum = 0;
+                              for (let j = 0; j < 5; j++) { sum += formattedData[i - j].close; }
+                              ma5Data.push({ time: formattedData[i].time, value: sum / 5 });
+                          }
+                          ma5Series.setData(ma5Data);
+                          chart.timeScale().fitContent();
+                      } catch (e) { console.error(e); }
+                  }
+
+                  const canvas = document.getElementById('drawingCanvas');
+                  const ctx = canvas.getContext('2d');
+                  function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+                  window.addEventListener('resize', resizeCanvas);
+                  setTimeout(resizeCanvas, 500);
+
+                  let shapes = []; let isDrawingMode = false; let currentMode = 'line';
+                  let config = { color: '#d63031', width: 2, style: 'solid', textSize: 16 };
+                  let startPoint = null; let tempShape = null;
+
+                  function setDrawingMode(enable, mode, color, width, style, textSize) {
+                      isDrawingMode = enable; currentMode = mode || currentMode;
+                      if(color) config.color = color; if(width) config.width = parseInt(width);
+                      if(enable) { canvas.classList.add('active-canvas'); chart.applyOptions({ handleScroll: false, handleScale: false }); }
+                      else { canvas.classList.remove('active-canvas'); chart.applyOptions({ handleScroll: true, handleScale: true }); }
+                  }
+
+                  canvas.addEventListener('touchstart', (e) => {
+                      if (!isDrawingMode) return;
+                      const touch = e.touches;
+                      startPoint = { x: touch.clientX, y: touch.clientY };
+                  });
+
+                  canvas.addEventListener('touchmove', (e) => {
+                      if (!isDrawingMode || !startPoint) return;
+                      const touch = e.touches;
+                      tempShape = { type: currentMode, x1: startPoint.x, y1: startPoint.y, x2: touch.clientX, y2: touch.clientY, color: config.color, width: config.width };
+                      redrawAll();
+                      drawShape(ctx, tempShape);
+                  });
+
+                  canvas.addEventListener('touchend', () => {
+                      if (tempShape) { shapes.push(tempShape); tempShape = null; }
+                      startPoint = null; redrawAll();
+                  });
+
+                  function drawShape(context, s) {
+                      context.beginPath(); context.strokeStyle = s.color; context.lineWidth = s.width;
+                      context.moveTo(s.x1, s.y1); context.lineTo(s.x2, s.y2); context.stroke();
+                  }
+
+                  function redrawAll() { ctx.clearRect(0, 0, canvas.width, canvas.height); shapes.forEach(s => drawShape(ctx, s)); }
+                  function clearAllLines() { shapes = []; redrawAll(); }
+              </script>
+          </body>
+          </html>
+          EOF
+
+          # 4. 強制寫入對應的 pubspec.yaml 設定檔
           cat << 'EOF' > pubspec.yaml
           name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
-          publish_to: 'none'
+          publish_to: "none"
           version: 1.0.0+1
           environment:
-            sdk: '>=3.0.0 <4.0.0'
+            sdk: ">=3.0.0 <4.0.0"
           dependencies:
             flutter:
               sdk: flutter
@@ -52,25 +250,8 @@ jobs:
               - assets/chart.html
           EOF
 
-          # 5. 強制寫入含有手機連網權限的 Android 清單檔案
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://android.com">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <application android:label="台股專業畫線App" android:icon="@mipmap/ic_launcher">
-                  <activity android:name="io.flutter.embedding.android.FlutterActivity"
-                            android:exported="true"
-                            android:launchMode="singleTop"
-                            android:theme="@style/LaunchTheme"
-                            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
-                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+          # 5. 強制加入手機與平板的網際網路連線權限
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
