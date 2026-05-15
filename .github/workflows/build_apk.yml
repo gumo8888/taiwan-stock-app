@@ -5,43 +5,39 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. 抓取您在網頁上建立的 main.dart 與 chart.html 等檔案
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. 安裝 Java 虛擬機環境
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. 安裝 Flutter 官方開發者工具
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
 
-      # 4. 終極修復：在雲端從零打造 100% 完美的官方專案結構
-      - name: Force Force Re-create 100% Valid Flutter Project
+      - name: Force Re-create with Assets Protection
         run: |
-          # 備份您網頁上的重要原始碼
+          # 1. 安全暫存您在網頁上建立的兩個核心檔案
           mkdir -p /tmp/backup_lib /tmp/backup_assets
-          [ -f lib/main.dart ] && cp lib/main.dart /tmp/backup_lib/ || echo "void main() {}" > /tmp/backup_lib/main.dart
-          [ -f assets/chart.html ] && cp assets/chart.html /tmp/backup_assets/ || echo "<html></html>" > /tmp/backup_assets/chart.html
+          cp lib/main.dart /tmp/backup_lib/main.dart
+          cp assets/chart.html /tmp/backup_assets/chart.html
 
-          # 清空當前雲端目錄，防止舊結構干擾
-          rm -rf * .git .github
+          # 2. 精準清除舊專案結構（保留 .github 自動化配置）
+          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.github' ! -name '.git' -exec rm -rf {} +
 
-          # 呼叫官方命令，強行初始化一個名為 taiwan_stock_app 的純淨標準專案
+          # 3. 呼叫官方指令重新生成 100% 正規的 Flutter 專案
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 覆蓋回您寫好的主程式與網頁引擎
+          # 4. 【關鍵修復】在全新結構中強制創建 assets 目錄，並將 K 線引擎與主程式塞回正確路徑
           mkdir -p assets
           cp /tmp/backup_lib/main.dart lib/main.dart
           cp /tmp/backup_assets/chart.html assets/chart.html
 
-          # 強制全面覆寫 pubspec.yaml 設定檔，確保外部引用套件 100% 正確不報錯
+          # 5. 重寫配置檔，明確向編譯引擎宣告 assets 網頁路徑，防止卡死
           echo 'name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
           publish_to: "none"
@@ -56,18 +52,15 @@ jobs:
             assets:
               - assets/chart.html' > pubspec.yaml
 
-          # 在全新生成的官方清單檔案中，自動幫您注入 Android 手機網路權限
+          # 6. 注入平板與手機必備的網際網路連線權限
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
 
-      # 5. 執行依賴套件自動修復
-      - name: Auto Fix and Install dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      # 6. 強制執行 Release 模式打包
-      - name: Build Pure Production APK
+      - name: Build APK
         run: flutter build apk --release --no-tree-shake-icons
 
-      # 7. 上傳並匯出最終成品 APK 到網頁
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
