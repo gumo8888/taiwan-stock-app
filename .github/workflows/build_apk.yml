@@ -19,43 +19,58 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Robust Re-create with Assets Protection
+      - name: Pure Rebuild Environment Creation
         run: |
-          # 1. 建立安全暫存目錄
-          mkdir -p /tmp/backup_lib /tmp/backup_assets
+          # 1. 先將主程式與 K 線網頁存至暫存區
+          mkdir -p /tmp/stock_backup
+          cp lib/main.dart /tmp/stock_backup/main.dart
+          cp assets/chart.html /tmp/stock_backup/chart.html
 
-          # 2. 安全檢查並備份主程式與 K 線網頁（即使路徑不存在也不會報錯）
-          if [ -f lib/main.dart ]; then cp lib/main.dart /tmp/backup_lib/; fi
-          if [ -f assets/chart.html ]; then cp assets/chart.html /tmp/backup_assets/; fi
-
-          # 3. 精準清除舊有的殘缺結構，但絕對保留重要的 .github 腳本目錄
-          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.github' ! -name '.git' -exec rm -rf {} +
-
-          # 4. 讓 Flutter 重新初始化一個最標準、絕不報錯的官方專案範本
+          # 2. 建立一個全新的、完全乾淨的標準子目錄結構，絕不呼叫刪除指令
+          rm -rf lib assets android pubspec.yaml
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 5. 強制創建 assets 目錄，並將您的 K 線網頁與主程式覆蓋回去標準結構
+          # 3. 移回剛才備份的核心程式碼
           mkdir -p assets
-          if [ -f /tmp/backup_lib/main.dart ]; then cp /tmp/backup_lib/main.dart lib/; fi
-          if [ -f /tmp/backup_assets/chart.html ]; then cp /tmp/backup_assets/chart.html assets/; fi
+          cp /tmp/stock_backup/main.dart lib/main.dart
+          cp /tmp/stock_backup/chart.html assets/chart.html
 
-          # 6. 重新覆寫標準的 pubspec.yaml，確保外部套件與資產路徑正確
-          echo 'name: taiwan_stock_app
+          # 4. 強制寫入完美無誤的 pubspec.yaml，明確宣告 WebView 與資產路徑
+          cat << 'EOF' > pubspec.yaml
+          name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
-          publish_to: "none"
+          publish_to: 'none'
           version: 1.0.0+1
           environment:
-            sdk: ">=3.0.0 <4.0.0"
+            sdk: '>=3.0.0 <4.0.0'
           dependencies:
             flutter:
               sdk: flutter
             webview_flutter: ^4.4.2
           flutter:
             assets:
-              - assets/chart.html' > pubspec.yaml
+              - assets/chart.html
+          EOF
 
-          # 7. 修改剛建立好的標準設定檔，強制加入手機與平板的網路權限
-          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
+          # 5. 強制寫入含有手機連網權限的 Android 清單檔案
+          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
+          <manifest xmlns:android="http://android.com">
+              <uses-permission android:name="android.permission.INTERNET"/>
+              <application android:label="台股專業畫線App" android:icon="@mipmap/ic_launcher">
+                  <activity android:name="io.flutter.embedding.android.FlutterActivity"
+                            android:exported="true"
+                            android:launchMode="singleTop"
+                            android:theme="@style/LaunchTheme"
+                            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
 
       - name: Install dependencies
         run: flutter pub get
