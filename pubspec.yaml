@@ -1,0 +1,13 @@
+name: taiwan_stock_app
+description: A professional Taiwan Stock Chart App.
+version: 1.0.0+1
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  webview_flutter: ^4.4.2
+  http: ^1.1.0
+flutter:
+  assets:
+    - assets/chart.html
