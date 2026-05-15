@@ -18,16 +18,65 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Fix Android Permissions
+      - name: Auto Generate Complete Android Environment
         run: |
-          mkdir -p android/app/src/main
+          # 自動補齊 Flutter Android 必要的目錄結構
+          mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/kotlin/com/example/taiwan_stock_app
+
+          # 1. 強制重寫最核心的 AndroidManifest.xml (加入網路權限與導航 Activity)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://android.com">
               <uses-permission android:name="android.permission.INTERNET"/>
-              <application android:label="台股專業畫線App">
-                  <activity android:name=".MainActivity" android:exported="true"/>
+              <application android:label="台股專業畫線App" android:icon="@mipmap/ic_launcher" android:hasCode="true">
+                  <activity android:name="io.flutter.embedding.android.FlutterActivity"
+                            android:exported="true"
+                            android:launchMode="singleTop"
+                            android:theme="@style/LaunchTheme"
+                            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
+                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
               </application>
           </manifest>' > android/app/src/main/AndroidManifest.xml
+
+          # 2. 自動補齊 Gradle 構建設定檔，防止缺檔報錯
+          echo "include ':app'" > android/settings.gradle
+          
+          mkdir -p android/app
+          echo 'apply plugin: "com.android.application"
+          apply plugin: "kotlin-android"
+          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
+          android {
+              compileSdkVersion 34
+              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+              kotlinOptions { jvmTarget = "17" }
+              defaultConfig { applicationId "com.example.taiwan_stock_app"; minSdkVersion 21; targetSdkVersion 34; versionCode 1; versionName "1.0.0" }
+              buildTypes { release { signingConfig signingConfigs.debug } }
+          }' > android/app/build.gradle
+
+          echo 'buildscript {
+              ext.kotlin_version = "1.8.22"
+              repositories { google(); mavenCentral() }
+              dependencies { classpath "com.android.tools.build:gradle:8.1.0"; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+          }
+          allprojects { repositories { google(); mavenCentral() } }
+          rootProject.buildDir = "../build"
+          subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
+          subprojects { project.evaluationDependsOn(":app") }
+          tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
+
+          # 3. 建立基本樣式與防崩潰設定
+          mkdir -p android/app/src/main/res/values
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar"></style><style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar"></style></resources>' > android/app/src/main/res/values/styles.xml
+          
+          # 4. 建立基礎入口 MainActivity.kt
+          echo 'package com.example.taiwan_stock_app
+          import io.flutter.embedding.android.FlutterActivity
+          class MainActivity: FlutterActivity() {}' > android/app/src/main/kotlin/com/example/taiwan_stock_app/MainActivity.kt
 
       - name: Install dependencies
         run: flutter pub get
@@ -35,7 +84,7 @@ jobs:
       - name: Build APK
         run: flutter build apk --release --no-tree-shake-icons
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Taiwan-Stock-App-APK
