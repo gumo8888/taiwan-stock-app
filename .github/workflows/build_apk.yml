@@ -20,21 +20,33 @@ jobs:
 
       - name: Auto Generate Complete Android Environment
         run: |
-          # 自動補齊 Flutter Android 必要的目錄結構
+          # 1. 建立基礎目錄結構
           mkdir -p android/app/src/main/res/mipmap-hdpi
+          mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/kotlin/com/example/taiwan_stock_app
+          mkdir -p android/gradle/wrapper
 
-          # 1. 強制重寫最核心的 AndroidManifest.xml (加入網路權限與導航 Activity)
+          # 2. 生成必要的專案層設定檔
+          echo "include ':app'" > android/settings.gradle
+          echo "sdk.dir=/usr/local/lib/android/sdk" > android/local.properties
+
+          # 3. 建立封裝 Gradle 版本的 Wrapper (防止缺少系統組件)
+          echo "distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.1-all.zip" > android/gradle/wrapper/gradle-wrapper.properties
+
+          # 4. 強制寫入最核心的 AndroidManifest.xml (連網權限與基本 Activity)
           echo '<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://android.com">
               <uses-permission android:name="android.permission.INTERNET"/>
-              <application android:label="台股專業畫線App" android:icon="@mipmap/ic_launcher" android:hasCode="true">
+              <application android:label="台股專業畫線App" android:hasCode="true">
                   <activity android:name="io.flutter.embedding.android.FlutterActivity"
                             android:exported="true"
                             android:launchMode="singleTop"
-                            android:theme="@style/LaunchTheme"
+                            android:theme="@android:style/Theme.Black.NoTitleBar"
                             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
-                      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN"/>
                           <category android:name="android.intent.category.LAUNCHER"/>
@@ -43,25 +55,14 @@ jobs:
               </application>
           </manifest>' > android/app/src/main/AndroidManifest.xml
 
-          # 2. 自動補齊 Gradle 構建設定檔，防止缺檔報錯
-          echo "include ':app'" > android/settings.gradle
-          
-          mkdir -p android/app
-          echo 'apply plugin: "com.android.application"
-          apply plugin: "kotlin-android"
-          apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-          android {
-              compileSdkVersion 34
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-              kotlinOptions { jvmTarget = "17" }
-              defaultConfig { applicationId "com.example.taiwan_stock_app"; minSdkVersion 21; targetSdkVersion 34; versionCode 1; versionName "1.0.0" }
-              buildTypes { release { signingConfig signingConfigs.debug } }
-          }' > android/app/build.gradle
-
+          # 5. 生成根目錄 build.gradle (使用新版 Flutter 插件寫法，完美避開路徑變數)
           echo 'buildscript {
               ext.kotlin_version = "1.8.22"
               repositories { google(); mavenCentral() }
-              dependencies { classpath "com.android.tools.build:gradle:8.1.0"; classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version" }
+              dependencies {
+                  classpath "com.android.tools.build:gradle:8.1.0"
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
           }
           allprojects { repositories { google(); mavenCentral() } }
           rootProject.buildDir = "../build"
@@ -69,14 +70,27 @@ jobs:
           subprojects { project.evaluationDependsOn(":app") }
           tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
 
-          # 3. 建立基本樣式與防崩潰設定
-          mkdir -p android/app/src/main/res/values
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar"></style><style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar"></style></resources>' > android/app/src/main/res/values/styles.xml
-          
-          # 4. 建立基礎入口 MainActivity.kt
+          # 6. 生成 App 模組層 build.gradle
+          echo 'plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+          android {
+              namespace "com.example.taiwan_stock_app"
+              compileSdkVersion 34
+              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+              kotlinOptions { jvmTarget = "17" }
+              defaultConfig { applicationId "com.example.taiwan_stock_app"; minSdkVersion 21; targetSdkVersion 34; versionCode 1; versionName "1.0.0" }
+              buildTypes { release { signingConfig signingConfigs.debug } }
+          }' > android/app/build.gradle
+
+          # 7. 建立基礎入口程式碼與樣式
           echo 'package com.example.taiwan_stock_app
           import io.flutter.embedding.android.FlutterActivity
           class MainActivity: FlutterActivity() {}' > android/app/src/main/kotlin/com/example/taiwan_stock_app/MainActivity.kt
+          
+          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar"></style><style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar"></style></resources>' > android/app/src/main/res/values/styles.xml
 
       - name: Install dependencies
         run: flutter pub get
