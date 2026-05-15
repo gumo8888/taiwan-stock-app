@@ -5,7 +5,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -18,79 +19,39 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Auto Generate Complete Android Environment
+      - name: Standard Android Project Re-creation
         run: |
-          # 1. 建立基礎目錄結構
-          mkdir -p android/app/src/main/res/mipmap-hdpi
-          mkdir -p android/app/src/main/res/values
-          mkdir -p android/app/src/main/kotlin/com/example/taiwan_stock_app
-          mkdir -p android/gradle/wrapper
+          # 1. 暫存保存您的核心程式碼與 K 線網頁
+          mkdir -p /tmp/backup_lib /tmp/backup_assets
+          [ -f lib/main.dart ] && cp lib/main.dart /tmp/backup_lib/
+          [ -f assets/chart.html ] && cp assets/chart.html /tmp/backup_assets/
 
-          # 2. 生成必要的專案層設定檔
-          echo "include ':app'" > android/settings.gradle
-          echo "sdk.dir=/usr/local/lib/android/sdk" > android/local.properties
+          # 2. 清空當前目錄，讓 Flutter 重新初始化一個最標準、絕不報錯的官方專案範本
+          rm -rf * .github
+          flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 3. 建立封裝 Gradle 版本的 Wrapper (防止缺少系統組件)
-          echo "distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.1-all.zip" > android/gradle/wrapper/gradle-wrapper.properties
+          # 3. 將您的 K 線網頁與主程式覆蓋回去標準結構
+          mkdir -p assets
+          [ -f /tmp/backup_lib/main.dart ] && cp /tmp/backup_lib/main.dart lib/
+          [ -f /tmp/backup_assets/chart.html ] && cp /tmp/backup_assets/chart.html assets/
 
-          # 4. 強制寫入最核心的 AndroidManifest.xml (連網權限與基本 Activity)
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://android.com">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <application android:label="台股專業畫線App" android:hasCode="true">
-                  <activity android:name="io.flutter.embedding.android.FlutterActivity"
-                            android:exported="true"
-                            android:launchMode="singleTop"
-                            android:theme="@android:style/Theme.Black.NoTitleBar"
-                            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > android/app/src/main/AndroidManifest.xml
+          # 4. 重新覆寫標準的 pubspec.yaml，確保外部套件與資產路徑正確
+          echo 'name: taiwan_stock_app
+          description: A professional Taiwan Stock Chart App.
+          version: 1.0.0+1
+          environment:
+            sdk: ">=3.0.0 <4.0.0"
+          dependencies:
+            flutter:
+              sdk: flutter
+            webview_flutter: ^4.4.2
+            http: ^1.1.0
+          flutter:
+            assets:
+              - assets/chart.html' > pubspec.yaml
 
-          # 5. 生成根目錄 build.gradle (使用新版 Flutter 插件寫法，完美避開路徑變數)
-          echo 'buildscript {
-              ext.kotlin_version = "1.8.22"
-              repositories { google(); mavenCentral() }
-              dependencies {
-                  classpath "com.android.tools.build:gradle:8.1.0"
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          rootProject.buildDir = "../build"
-          subprojects { project.buildDir = "${rootProject.buildDir}/${project.name}" }
-          subprojects { project.evaluationDependsOn(":app") }
-          tasks.register("clean", Delete) { delete rootProject.buildDir }' > android/build.gradle
-
-          # 6. 生成 App 模組層 build.gradle
-          echo 'plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-          }
-          android {
-              namespace "com.example.taiwan_stock_app"
-              compileSdkVersion 34
-              compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-              kotlinOptions { jvmTarget = "17" }
-              defaultConfig { applicationId "com.example.taiwan_stock_app"; minSdkVersion 21; targetSdkVersion 34; versionCode 1; versionName "1.0.0" }
-              buildTypes { release { signingConfig signingConfigs.debug } }
-          }' > android/app/build.gradle
-
-          # 7. 建立基礎入口程式碼與樣式
-          echo 'package com.example.taiwan_stock_app
-          import io.flutter.embedding.android.FlutterActivity
-          class MainActivity: FlutterActivity() {}' > android/app/src/main/kotlin/com/example/taiwan_stock_app/MainActivity.kt
-          
-          echo '<?xml version="1.0" encoding="utf-8"?><resources><style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar"></style><style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar"></style></resources>' > android/app/src/main/res/values/styles.xml
+          # 5. 修改剛建立好的標準設定檔，強制加入手機網路權限
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
