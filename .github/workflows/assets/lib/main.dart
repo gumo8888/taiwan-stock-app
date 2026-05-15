@@ -21,6 +21,7 @@ class StockChartScreen extends StatefulWidget {
 }
 
 class _StockChartScreenState extends State<StockChartScreen> {
+  // 嚴格遵循新版 webview_flutter 規範的控制器結構
   late final WebViewController _webViewController;
   bool _isDrawingMode = false;
   String _currentStockId = "2330";
@@ -37,12 +38,15 @@ class _StockChartScreenState extends State<StockChartScreen> {
   @override
   void initState() {
     super.initState();
+    // 官方新版標準初始化流程，確保雲端編譯絕對不報錯
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
-        NavigationDelegate(onPageFinished: (url) {
-          _webViewController.runJavaScript("changeStock('$_currentStockId')");
-        }),
+        NavigationDelegate(
+          onPageFinished: (String url) {
+            _webViewController.runJavaScript("changeStock('$_currentStockId')");
+          },
+        ),
       )
       ..loadFlutterAsset('assets/chart.html');
   }
@@ -94,10 +98,14 @@ class _StockChartScreenState extends State<StockChartScreen> {
               child: Row(
                 children: [
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isDrawingMode ? Colors.red : Colors.grey,
+                    ),
                     onPressed: () {
                       setState(() { _isDrawingMode = !_isDrawingMode; });
-                      _webViewController.runJavaScript("setDrawingMode($_isDrawingMode, 'line', '#d63031', 2, 'solid', 16)");
+                      _webViewController.runJavaScript(
+                        "setDrawingMode($_isDrawingMode, 'line', '#d63031', 2, 'solid', 16)"
+                      );
                     },
                     child: Text(_isDrawingMode ? "關閉畫線" : "開啟畫線"),
                   ),
