@@ -19,25 +19,27 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Force Re-create with Assets Protection
+      - name: Robust Re-create with Assets Protection
         run: |
-          # 1. 安全暫存您在網頁上建立的兩個核心檔案
+          # 1. 建立安全暫存目錄
           mkdir -p /tmp/backup_lib /tmp/backup_assets
-          cp lib/main.dart /tmp/backup_lib/main.dart
-          cp assets/chart.html /tmp/backup_assets/chart.html
 
-          # 2. 精準清除舊專案結構（保留 .github 自動化配置）
+          # 2. 安全檢查並備份主程式與 K 線網頁（即使路徑不存在也不會報錯）
+          if [ -f lib/main.dart ]; then cp lib/main.dart /tmp/backup_lib/; fi
+          if [ -f assets/chart.html ]; then cp assets/chart.html /tmp/backup_assets/; fi
+
+          # 3. 精準清除舊有的殘缺結構，但絕對保留重要的 .github 腳本目錄
           find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.github' ! -name '.git' -exec rm -rf {} +
 
-          # 3. 呼叫官方指令重新生成 100% 正規的 Flutter 專案
+          # 4. 讓 Flutter 重新初始化一個最標準、絕不報錯的官方專案範本
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 4. 【關鍵修復】在全新結構中強制創建 assets 目錄，並將 K 線引擎與主程式塞回正確路徑
+          # 5. 強制創建 assets 目錄，並將您的 K 線網頁與主程式覆蓋回去標準結構
           mkdir -p assets
-          cp /tmp/backup_lib/main.dart lib/main.dart
-          cp /tmp/backup_assets/chart.html assets/chart.html
+          if [ -f /tmp/backup_lib/main.dart ]; then cp /tmp/backup_lib/main.dart lib/; fi
+          if [ -f /tmp/backup_assets/chart.html ]; then cp /tmp/backup_assets/chart.html assets/; fi
 
-          # 5. 重寫配置檔，明確向編譯引擎宣告 assets 網頁路徑，防止卡死
+          # 6. 重新覆寫標準的 pubspec.yaml，確保外部套件與資產路徑正確
           echo 'name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
           publish_to: "none"
@@ -52,7 +54,7 @@ jobs:
             assets:
               - assets/chart.html' > pubspec.yaml
 
-          # 6. 注入平板與手機必備的網際網路連線權限
+          # 7. 修改剛建立好的標準設定檔，強制加入手機與平板的網路權限
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
