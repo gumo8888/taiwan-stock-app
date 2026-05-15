@@ -15,7 +15,6 @@
     <canvas id="drawingCanvas"></canvas>
 
     <script>
-        // 初始化 K 線圖表
         const chart = LightweightCharts.createChart(document.getElementById('chart'), {
             layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
             grid: { vertLines: { color: '#2b2b43' }, horzLines: { color: '#2b2b43' } },
@@ -23,244 +22,76 @@
         });
         const candlestickSeries = chart.addCandlestickSeries({ upColor: '#ef5350', downColor: '#26a69a' });
         const ma5Series = chart.addLineSeries({ color: '#f5cd79', lineWidth: 1 });
-        const ma10Series = chart.addLineSeries({ color: '#3dc1d3', lineWidth: 1 });
-        const ma20Series = chart.addLineSeries({ color: '#e66767', lineWidth: 1 });
 
-        function calculateMA(data, period) {
-            let result = [];
-            for (let i = 0; i < data.length; i++) {
-                if (i < period - 1) continue;
-                let sum = 0;
-                for (let j = 0; j < period; j++) { sum += data[i - j].close; }
-                result.push({ time: data[i].time, value: sum / period });
-            }
-            return result;
+        // 直接在前端網頁異步調用公開 API 撈取技術 K 線，完美繞過手機原生平台網路限制
+        async function changeStock(stockId) {
+            const currentYear = new Date().getFullYear();
+            const url = `https://finmindtrade.com{stockId}&start_date=${currentYear}-01-01`;
+            try {
+                const response = await fetch(url);
+                const resData = await response.json();
+                const formattedData = resData.data.map(item => ({
+                    time: item.date, open: item.open, high: item.max, low: item.min, close: item.close
+                }));
+                candlestickSeries.setData(formattedData);
+                
+                // 計算五日 MA
+                let ma5Data = [];
+                for (let i = 0; i < formattedData.length; i++) {
+                    if (i < 4) continue;
+                    let sum = 0;
+                    for (let j = 0; j < 5; j++) { sum += formattedData[i - j].close; }
+                    ma5Data.push({ time: formattedData[i].time, value: sum / 5 });
+                }
+                ma5Series.setData(ma5Data);
+                chart.timeScale().fitContent();
+            } catch (e) { console.error(e); }
         }
 
-        // 供外部切換股票代號使用
-        function updateData(klineDataJson) {
-            const data = JSON.parse(klineDataJson);
-            candlestickSeries.setData(data);
-            ma5Series.setData(calculateMA(data, 5));
-            ma10Series.setData(calculateMA(data, 10));
-            ma20Series.setData(calculateMA(data, 20));
-            chart.timeScale().fitContent();
-        }
-
-        // ====== 擴充 Canvas 高階拖曳與長按引擎 ======
+        // ====== Canvas 專業手勢畫線邏輯 ======
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d');
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            redrawAll();
-        }
+        function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 500);
 
-        let shapes = []; 
-        let isDrawingMode = false;
-        let currentMode = 'line'; 
+        let shapes = []; let isDrawingMode = false; let currentMode = 'line';
         let config = { color: '#d63031', width: 2, style: 'solid', textSize: 16 };
-        
-        let startPoint = null;
-        let tempShape = null;
-        
-        // 互動控制變數
-        let selectedShape = null; 
-        let dragTarget = null; // 'text', 'p1', 'p2'
-        let dragOffsetX = 0;
-        let dragOffsetY = 0;
-        let longPressTimer = null;
+        let startPoint = null; let tempShape = null;
 
         function setDrawingMode(enable, mode, color, width, style, textSize) {
-            isDrawingMode = enable;
-            currentMode = mode || currentMode;
-            if(color) config.color = color;
-            if(width) config.width = parseInt(width);
-            if(style) config.style = style;
-            if(textSize) config.textSize = parseInt(textSize);
-
-            if (enable) {
-                canvas.classList.add('active-canvas');
-                chart.applyOptions({ handleScroll: false, handleScale: false });
-            } else {
-                canvas.classList.remove('active-canvas');
-                chart.applyOptions({ handleScroll: true, handleScale: true });
-                selectedShape = null;
-                redrawAll();
-            }
-        }
-
-        // 點擊判定物件與端點
-        function findHitTarget(x, y) {
-            const clickRadius = 15; // 觸控判定範圍半徑
-
-            for (let i = shapes.length - 1; i >= 0; i--) {
-                const s = shapes[i];
-                if (s.type === 'text') {
-                    ctx.font = `${s.size}px Arial`;
-                    const textWidth = ctx.measureText(s.text).width;
-                    if (x >= s.x && x <= s.x + textWidth && y >= s.y - s.size && y <= s.y) {
-                        return { shape: s, target: 'text' };
-                    }
-                } else if (s.type === 'line' || s.type === 'arrow') {
-                    // 檢查端點 1
-                    if (Math.hypot(x - s.x1, y - s.y1) < clickRadius) return { shape: s, target: 'p1' };
-                    // 檢查端點 2
-                    if (Math.hypot(x - s.x2, y - s.y2) < clickRadius) return { shape: s, target: 'p2' };
-                }
-            }
-            return null;
+            isDrawingMode = enable; currentMode = mode || currentMode;
+            if(color) config.color = color; if(width) config.width = parseInt(width);
+            if(enable) { canvas.classList.add('active-canvas'); chart.applyOptions({ handleScroll: false, handleScale: false }); }
+            else { canvas.classList.remove('active-canvas'); chart.applyOptions({ handleScroll: true, handleScale: true }); }
         }
 
         canvas.addEventListener('touchstart', (e) => {
             if (!isDrawingMode) return;
             const touch = e.touches[0];
-            const clickX = touch.clientX;
-            const clickY = touch.clientY;
-
-            const hit = findHitTarget(clickX, clickY);
-            
-            if (hit) {
-                selectedShape = hit.shape;
-                dragTarget = hit.target;
-
-                if (dragTarget === 'text') {
-                    dragOffsetX = clickX - selectedShape.x;
-                    dragOffsetY = clickY - selectedShape.y;
-                    
-                    // 觸發 2 秒長按刪除計時器
-                    longPressTimer = setTimeout(() => {
-                        if (confirm("是否刪除此文字註解？")) {
-                            shapes = shapes.filter(item => item !== selectedShape);
-                            selectedShape = null;
-                            dragTarget = null;
-                            redrawAll();
-                        }
-                    }, 2000);
-                }
-                redrawAll();
-                return;
-            }
-
-            // 新增物件邏輯
-            startPoint = { x: clickX, y: clickY };
-            if (currentMode === 'text') {
-                const txt = prompt("請輸入註解文字:", "");
-                if (txt) {
-                    shapes.push({
-                        type: 'text', x: startPoint.x, y: startPoint.y, text: txt,
-                        color: config.color, size: config.textSize
-                    });
-                }
-                redrawAll();
-                startPoint = null;
-            }
+            startPoint = { x: touch.clientX, y: touch.clientY };
         });
 
         canvas.addEventListener('touchmove', (e) => {
-            if (!isDrawingMode) return;
+            if (!isDrawingMode || !startPoint) return;
             const touch = e.touches[0];
-            const currentX = touch.clientX;
-            const currentY = touch.clientY;
-
-            // 移動中取消長按計時器
-            if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-
-            // A 分支：變更既存物件位置或端點
-            if (selectedShape && dragTarget) {
-                if (dragTarget === 'text') {
-                    selectedShape.x = currentX - dragOffsetX;
-                    selectedShape.y = currentY - dragOffsetY;
-                } else if (dragTarget === 'p1') {
-                    selectedShape.x1 = currentX;
-                    selectedShape.y1 = currentY;
-                } else if (dragTarget === 'p2') {
-                    selectedShape.x2 = currentX;
-                    selectedShape.y2 = currentY;
-                }
-                redrawAll();
-                return;
-            }
-
-            // B 分支：繪製新線段
-            if (!startPoint) return;
-            tempShape = {
-                type: currentMode, x1: startPoint.x, y1: startPoint.y, x2: currentX, y2: currentY,
-                color: config.color, width: config.width, style: config.style
-            };
+            tempShape = { type: currentMode, x1: startPoint.x, y1: startPoint.y, x2: touch.clientX, y2: touch.clientY, color: config.color, width: config.width };
             redrawAll();
             drawShape(ctx, tempShape);
         });
 
         canvas.addEventListener('touchend', () => {
-            if (longPressTimer) clearTimeout(longPressTimer);
-            
-            dragTarget = null;
-            if (tempShape) {
-                shapes.push(tempShape);
-                tempShape = null;
-            }
-            startPoint = null;
-            redrawAll();
+            if (tempShape) { shapes.push(tempShape); tempShape = null; }
+            startPoint = null; redrawAll();
         });
 
         function drawShape(context, s) {
-            context.beginPath();
-            context.strokeStyle = s.color;
-            context.lineWidth = s.width;
-
-            if (s.style === 'dashed') context.setLineDash([10, 10]);
-            else if (s.style === 'dotted') context.setLineDash([2, 5]);
-            else context.setLineDash([]);
-
-            if (s.type === 'line') {
-                context.moveTo(s.x1, s.y1);
-                context.lineTo(s.x2, s.y2);
-                context.stroke();
-            } else if (s.type === 'arrow') {
-                context.moveTo(s.x1, s.y1);
-                context.lineTo(s.x2, s.y2);
-                context.stroke();
-                
-                const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
-                context.setLineDash([]); 
-                context.beginPath();
-                context.fillStyle = s.color;
-                context.moveTo(s.x2, s.y2);
-                context.lineTo(s.x2 - 15 * Math.cos(angle - Math.PI / 6), s.y2 - 15 * Math.sin(angle - Math.PI / 6));
-                context.lineTo(s.x2 - 15 * Math.cos(angle + Math.PI / 6), s.y2 - 15 * Math.sin(angle + Math.PI / 6));
-                context.fill();
-            } else if (s.type === 'text') {
-                context.setLineDash([]);
-                context.fillStyle = s.color;
-                context.font = `${s.size}px Arial`;
-                context.fillText(s.text, s.x, s.y);
-            }
-
-            // 若是被選中的物件，繪製提示錨點 [2]
-            if (isDrawingMode && selectedShape === s) {
-                context.setLineDash([]);
-                context.strokeStyle = '#ffffff';
-                context.lineWidth = 1;
-                if (s.type === 'line' || s.type === 'arrow') {
-                    context.strokeRect(s.x1 - 5, s.y1 - 5, 10, 10);
-                    context.strokeRect(s.x2 - 5, s.y2 - 5, 10, 10);
-                }
-            }
+            context.beginPath(); context.strokeStyle = s.color; context.lineWidth = s.width;
+            context.moveTo(s.x1, s.y1); context.lineTo(s.x2, s.y2); context.stroke();
         }
 
-        function redrawAll() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            shapes.forEach(s => drawShape(ctx, s));
-        }
-
-        function clearAllLines() {
-            shapes = [];
-            redrawAll();
-        }
+        function redrawAll() { ctx.clearRect(0, 0, canvas.width, canvas.height); shapes.forEach(s => drawShape(ctx, s)); }
+        function clearAllLines() { shapes = []; redrawAll(); }
     </script>
 </body>
 </html>
