@@ -21,21 +21,23 @@ jobs:
 
       - name: Standard Android Project Re-creation
         run: |
-          # 1. 暫存保存您的核心程式碼與 K 線網頁
+          # 1. 安全暫存您的核心程式碼與 K 線網頁
           mkdir -p /tmp/backup_lib /tmp/backup_assets
           [ -f lib/main.dart ] && cp lib/main.dart /tmp/backup_lib/
           [ -f assets/chart.html ] && cp assets/chart.html /tmp/backup_assets/
 
-          # 2. 清空當前目錄，讓 Flutter 重新初始化一個最標準、絕不報錯的官方專案範本
-          rm -rf * .github
+          # 2. 精準清除舊有的專案檔，但絕對保留重要的 .github 腳本目錄
+          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.github' ! -name '.git' -exec rm -rf {} +
+
+          # 3. 讓 Flutter 重新初始化一個最標準、絕不報錯的官方專案範本
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 3. 將您的 K 線網頁與主程式覆蓋回去標準結構
+          # 4. 將您的 K 線網頁與主程式覆蓋回去標準結構
           mkdir -p assets
           [ -f /tmp/backup_lib/main.dart ] && cp /tmp/backup_lib/main.dart lib/
           [ -f /tmp/backup_assets/chart.html ] && cp /tmp/backup_assets/chart.html assets/
 
-          # 4. 重新覆寫標準的 pubspec.yaml，確保外部套件與資產路徑正確
+          # 5. 重新覆寫標準的 pubspec.yaml，確保外部套件與資產路徑正確
           echo 'name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
           version: 1.0.0+1
@@ -50,7 +52,7 @@ jobs:
             assets:
               - assets/chart.html' > pubspec.yaml
 
-          # 5. 修改剛建立好的標準設定檔，強制加入手機網路權限
+          # 6. 修改剛建立好的標準設定檔，強制加入手機網路權限
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
