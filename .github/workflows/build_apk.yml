@@ -24,7 +24,7 @@ jobs:
           rm -rf * .git .github
           flutter create --org com.example --project-name taiwan_stock_app .
           
-          # 1. 建立 100% 符合官方強型別規範之完美的 Dart 核心主程式 (精準重構均線迭代器，徹底清除 elementAt 型別盲區)
+          # 1. 建立完美的 Dart 核心主程式 (精準重構 drawMA 均線起點路徑，徹底破除 pts.first 的編譯死鎖)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -393,7 +393,7 @@ jobs:
                 index++;
               }
 
-              // 【終極核心修復】完全使用安全的純迭代器（Iterator）連點成線，100% 繞過 elementAt 與索引的所有編譯漏洞！
+              // 【核心修復】完全使用指標遍歷連點成線，100% 繞過 pts.first 的平台編譯死鎖漏洞！
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.isEmpty || pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
@@ -495,7 +495,7 @@ jobs:
             uses-material-design: true
           EOF
 
-          # 3. 網絡與明文流量白名單全面放行
+          # 3. 網絡權限與明文流量全面開放
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
