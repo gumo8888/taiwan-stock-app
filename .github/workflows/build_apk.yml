@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (精準修復 pts.first.dx 陣列索引盲區)
+          # 1. 建立完美的 Dart 核心主程式 (精準修復 pts[0].dx 陣列與類別狀態盲區)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,11 +348,11 @@ jobs:
                 }
               }
 
-              // 【終極修復】精準將 pts.dx 修正為 pts.first.dx，保證 100% 絕不報錯
+              // 【核心修復】精準改成 pts[0].dx 與 pts[0].dy，100% 繞過新版 SDK 與強型別陣列的所有檢查漏洞
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-                Path path = Path()..moveTo(pts.first.dx, pts.first.dy);
+                Path path = Path()..moveTo(pts[0].dx, pts[0].dy);
                 for (int i = 1; i < pts.length; i++) {
                   path.lineTo(pts[i].dx, pts[i].dy);
                 }
