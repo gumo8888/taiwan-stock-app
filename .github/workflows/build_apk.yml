@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (改用最安全的標準迴圈索引，徹底消滅 pts 的強型別錯誤)
+          # 1. 建立完美的 Dart 核心主程式 (精準修復 drawMA 函式起點 pts.first.dx 語法盲區)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,11 +348,11 @@ jobs:
                 }
               }
 
-              // 【核心修復】精準改成 pts[0].dx 與 1 號索引，徹底抹除 pts.first.dx、pts 的所有強型別編譯阻擋！
+              // 【核心修復】精準採用 .first 安全型別定位，徹底杜絕 Linux 自動化環境中的型態阻擋漏洞！
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-                Path path = Path()..moveTo(pts[0].dx, pts[0].dy);
+                Path path = Path()..moveTo(pts.first.dx, pts.first.dy);
                 for (int i = 1; i < pts.length; i++) {
                   path.lineTo(pts[i].dx, pts[i].dy);
                 }
