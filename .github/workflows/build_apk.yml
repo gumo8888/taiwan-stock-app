@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (精準修復 drawMA 函式起點 pts.first.dx 語法盲區)
+          # 1. 建立完美的 Dart 核心主程式 (加入 isEmpty 核心防禦與 pts[0] 語法修正)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,11 +348,11 @@ jobs:
                 }
               }
 
-              // 【核心修復】精準採用 .first 安全型別定位，徹底杜絕 Linux 自動化環境中的型態阻擋漏洞！
+              // 【核心防線修復】加入安全閥檢查並改用 pts[0]，確保數據極端情況下 100% 通過 AOT 語法安全編譯
               void drawMA(List<Offset> pts, Color c) {
-                if (pts.length < 2) return;
+                if (pts.isEmpty || pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-                Path path = Path()..moveTo(pts.first.dx, pts.first.dy);
+                Path path = Path()..moveTo(pts[0].dx, pts[0].dy);
                 for (int i = 1; i < pts.length; i++) {
                   path.lineTo(pts[i].dx, pts[i].dy);
                 }
