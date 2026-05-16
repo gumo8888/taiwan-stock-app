@@ -1,0 +1,453 @@
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+
+void main() => runApp(const TaiwanStockApp());
+
+class TaiwanStockApp extends StatelessWidget {
+  const TaiwanStockApp({Key? key}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: '台股專業看盤大師',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const StockChartScreen(),
+    );
+  }
+}
+
+// 100% 強型別技術分析數據模型
+class StockDataPoint {
+  final double open;
+  final double high;
+  final double low;
+  final double close;
+  final double volume;
+  StockDataPoint({
+    required this.open,
+    required this.high,
+    required this.low,
+    required this.close,
+    required this.volume,
+  });
+}
+
+// 2點自動成直線之專業畫線物件
+class ProLine {
+  final Offset p1;
+  final Offset p2;
+  final Color color;
+  final double width;
+  final String style; 
+  final bool isArrow;
+  ProLine({
+    required this.p1,
+    required this.p2,
+    required this.color,
+    required this.width,
+    required this.style,
+    required this.isArrow,
+  });
+}
+
+class StockChartScreen extends StatefulWidget {
+  const StockChartScreen({Key? key}) : super(key: key);
+  @override
+  _StockChartScreenState createState() => _StockChartScreenState();
+}
+
+class _StockChartScreenState extends State<StockChartScreen> {
+  String _currentStockId = "2330";
+  String _currentStockName = "台積電";
+  String _currentPeriod = "日線"; 
+
+  int _maDay1 = 5;
+  int _maDay2 = 20;
+  final TextEditingController _maController1 = TextEditingController(text: "5");
+  final TextEditingController _maController2 = TextEditingController(text: "20");
+
+  List<ProLine> _savedLines = [];
+  Offset? _firstPoint;
+  Offset? _currentMovingPoint;
+  bool _isDrawingMode = false;
+
+  Color _selectedColor = const Color(0xFFef5350);
+  double _selectedWidth = 2.0;
+  String _selectedStyle = "solid"; 
+  bool _isArrowMode = false;
+
+  final List<Color> _colors = [
+    const Color(0xFFef5350), const Color(0xFFff7675), const Color(0xFF8b0000), 
+    const Color(0xFFfdcb6e), const Color(0xFFffeaa7), const Color(0xFFe1b12c), 
+    const Color(0xFF0984e3), const Color(0xFF74b9ff), const Color(0xFF273c75), 
+    const Color(0xFF00b894), const Color(0xFF55efc4), const Color(0xFF4c5144), 
+    const Color(0xFFffffff), const Color(0xFFdfe6e9), const Color(0xFFb2bec3), 
+    const Color(0xFF34495e), const Color(0xFF7f8c8d), const Color(0xFF111111), 
+    const Color(0xFF6c5ce7), const Color(0xFFa29bfe), const Color(0xFF4a148c), 
+  ];
+
+  List<StockDataPoint> _getPeriodData() {
+    List<StockDataPoint> list = [];
+    double basePrice = _currentStockId == "2330" ? 950.0 : 180.0;
+    double volatility = _currentPeriod.contains("分") ? 3.0 : (_currentPeriod.contains("線") ? 40.0 : 15.0);
+    math.Random rand = math.Random(int.parse(_currentStockId) + _currentPeriod.hashCode);
+    
+    for (int i = 0; i < 50; i++) {
+      double open = basePrice + (rand.nextDouble() * volatility - (volatility / 2));
+      double close = open + (rand.nextDouble() * volatility - (volatility / 2));
+      double high = math.max(open, close) + rand.nextDouble() * (volatility / 3);
+      double low = math.min(open, close) - rand.nextDouble() * (volatility / 3);
+      double volume = 2000 + rand.nextDouble() * 8000; 
+      list.add(StockDataPoint(open: open, high: high, low: low, close: close, volume: volume));
+      basePrice = close;
+    }
+    return list;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    var stockData = _getPeriodData();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF131722),
+      appBar: AppBar(
+        title: Text("$_currentStockId $_currentStockName ($_currentPeriod)"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
+            onPressed: () => setState(() { _savedLines.clear(); _firstPoint = null; _currentMovingPoint = null; }),
+          )
+        ],
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(color: Color(0xFF1c2030)),
+              child: Center(child: Text("台股自選清單", style: TextStyle(fontSize: 18))),
+            ),
+            ListTile(
+              title: const Text("台積電"), subtitle: const Text("2330"),
+              onTap: () { setState(() { _currentStockId = "2330"; _currentStockName = "台積電"; }); Navigator.pop(context); },
+            ),
+            ListTile(
+              title: const Text("聯發科"), subtitle: const Text("2454"),
+              onTap: () { setState(() { _currentStockId = "2454"; _currentStockName = "聯發科"; }); Navigator.pop(context); },
+            ),
+            ListTile(
+              title: const Text("鴻海"), subtitle: const Text("2317"),
+              onTap: () { setState(() { _currentStockId = "2317"; _currentStockName = "鴻海"; }); Navigator.pop(context); },
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            color: const Color(0xFF1c2030),
+            child: Row(
+              children: [
+                const Text("MA1:", style: TextStyle(fontSize: 11)),
+                SizedBox(
+                  width: 35,
+                  height: 30,
+                  child: TextField(
+                    controller: _maController1,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(fontSize: 12),
+                    decoration: const InputDecoration(contentPadding: EdgeInsets.zero),
+                    onChanged: (v) { setState(() { _maDay1 = int.tryParse(v) ?? 5; }); },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text("MA2:", style: TextStyle(fontSize: 11)),
+                SizedBox(
+                  width: 35,
+                  height: 30,
+                  child: TextField(
+                    controller: _maController2,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(fontSize: 12),
+                    decoration: const InputDecoration(contentPadding: EdgeInsets.zero),
+                    onChanged: (v) { setState(() { _maDay2 = int.tryParse(v) ?? 20; }); },
+                  ),
+                ),
+                const Spacer(),
+                DropdownButton<String>(
+                  value: _currentPeriod,
+                  items: ["月線", "週線", "日線", "4小時線", "小時線", "5分鐘線"].map((String value) {
+                    return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontSize: 12)));
+                  }).toList(),
+                  onChanged: (v) { if (v != null) setState(() { _currentPeriod = v; }); },
+                )
+              ],
+            ),
+          ),
+          Expanded(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: AdvancedKLinePainter(data: stockData, ma1: _maDay1, ma2: _maDay2),
+                  ),
+                ),
+                Positioned.fill(
+                  child: GestureDetector(
+                    onPanDown: _isDrawingMode ? (details) {
+                      setState(() {
+                        if (_firstPoint == null) {
+                          _firstPoint = details.localPosition;
+                          _currentMovingPoint = details.localPosition;
+                        } else {
+                          _savedLines.add(ProLine(
+                            p1: _firstPoint!,
+                            p2: details.localPosition,
+                            color: _selectedColor,
+                            width: _selectedWidth,
+                            style: _selectedStyle,
+                            isArrow: _isArrowMode,
+                          ));
+                          _firstPoint = null; 
+                          _currentMovingPoint = null;
+                        }
+                      });
+                    } : null,
+                    onPanUpdate: _isDrawingMode && _firstPoint != null ? (details) {
+                      setState(() {
+                        _currentMovingPoint = details.localPosition;
+                      });
+                    } : null,
+                    child: CustomPaint(
+                      painter: ProDrawingPainter(
+                        savedLines: _savedLines,
+                        firstPoint: _firstPoint,
+                        movingPoint: _currentMovingPoint,
+                        previewColor: _selectedColor,
+                        previewWidth: _selectedWidth,
+                        previewStyle: _selectedStyle,
+                        previewArrow: _isArrowMode,
+                      ),
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: const Color(0xFF1c2030),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
+                        onPressed: () => setState(() { _isDrawingMode = !_isDrawingMode; _firstPoint = null; _currentMovingPoint = null; }),
+                        icon: Icon(_isDrawingMode ? Icons.edit_off : Icons.edit, size: 14),
+                        label: Text(_isDrawingMode ? "拉曳線條並點選終點" : "開啟2點畫線"),
+                      ),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.remove, color: _selectedStyle == "solid" && !_isArrowMode ? Colors.blue : Colors.white),
+                            onPressed: () => setState(() { _selectedStyle = "solid"; _isArrowMode = false; }),
+                            tooltip: "實線",
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.more_horiz, color: _selectedStyle == "dashed" ? Colors.blue : Colors.white),
+                            onPressed: () => setState(() { _selectedStyle = "dashed"; _isArrowMode = false; }),
+                            tooltip: "虛線",
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.trending_flat, color: _isArrowMode ? Colors.blue : Colors.white),
+                            onPressed: () => setState(() { _isArrowMode = true; }),
+                            tooltip: "箭頭線",
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Text("粗細: ", style: TextStyle(fontSize: 11)),
+                      ...[1.0, 2.0, 3.0].map((w) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: ChoiceChip(
+                          label: Text("${w.toInt()}px", style: const TextStyle(fontSize: 10)),
+                          selected: _selectedWidth == w,
+                          onSelected: (s) { if(s) setState(() => _selectedWidth = w); },
+                        ),
+                      )),
+                      const Spacer(),
+                      ..._colors.take(7).map((color) => GestureDetector(
+                        onTap: () => setState(() => _selectedColor = color),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 3),
+                          width: 20, height: 20,
+                          decoration: BoxDecoration(
+                            color: color, shape: BoxShape.circle,
+                            border: _selectedColor == color ? Border.all(color: Colors.white, width: 2) : null,
+                          ),
+                        ),
+                      ))
+                    ],
+                  )
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class AdvancedKLinePainter extends CustomPainter {
+  final List<StockDataPoint> data;
+  final int ma1;
+  final int ma2;
+  AdvancedKLinePainter({required this.data, required this.ma1, required this.ma2});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.isEmpty) return;
+    
+    double kHeight = size.height * 0.72;
+    double widthPerBar = size.width / data.length;
+
+    double maxH = data.map((e) => e.high).reduce(math.max);
+    double minL = data.map((e) => e.low).reduce(math.min);
+    double maxV = data.map((e) => e.volume).reduce(math.max);
+    double priceRange = maxH - minL;
+
+    Paint upPaint = Paint()..color = const Color(0xFFef5350)..style = PaintingStyle.fill;
+    Paint downPaint = Paint()..color = const Color(0xFF26a69a)..style = PaintingStyle.fill;
+
+    List<Offset> ma1Points = [];
+    List<Offset> ma2Points = [];
+
+    int index = 0;
+    for (var item in data) {
+      double x = index * widthPerBar + (widthPerBar / 2);
+      double barW = widthPerBar * 0.7;
+
+      double getY(double p) => kHeight - ((p - minL) / priceRange * (kHeight - 30) + 15);
+      double oY = getY(item.open);
+      double cY = getY(item.close);
+      double hY = getY(item.high);
+      double lY = getY(item.low);
+
+      Paint barPaint = item.close >= item.open ? upPaint : downPaint;
+      canvas.drawLine(Offset(x, hY), Offset(x, lY), Paint()..color = barPaint.color..strokeWidth = 1.2);
+      canvas.drawRect(Rect.fromLTRB(x - barW/2, math.min(oY, cY), x + barW/2, math.max(oY, cY)), barPaint);
+
+      double vH = (item.volume / maxV) * (size.height * 0.20);
+      canvas.drawRect(Rect.fromLTRB(x - barW/2, size.height - vH, x + barW/2, size.height), barPaint);
+
+      if (index >= ma1 - 1) {
+        double sum = 0; 
+        for (int j = 0; j < ma1; j++) { 
+          sum += data.elementAt(index - j).close; 
+        }
+        ma1Points.add(Offset(x, getY(sum / ma1)));
+      }
+      if (index >= ma2 - 1) {
+        double sum = 0; 
+        for (int j = 0; j < ma2; j++) { 
+          sum += data.elementAt(index - j).close; 
+        }
+        ma2Points.add(Offset(x, getY(sum / ma2)));
+      }
+      index++;
+    }
+
+    void drawMA(List<Offset> pts, Color c) {
+      if (pts.isEmpty || pts.length < 2) return;
+      Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
+      Path path = Path();
+      bool isFirst = true;
+      for (var pt in pts) {
+        if (isFirst) {
+          path.moveTo(pt.dx, pt.dy);
+          isFirst = false;
+        } else {
+          path.lineTo(pt.dx, pt.dy);
+        }
+      }
+      canvas.drawPath(path, p);
+    }
+    drawMA(ma1Points, const Color(0xFFf5cd79)); 
+    drawMA(ma2Points, const Color(0xFF3dc1d3)); 
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class ProDrawingPainter extends CustomPainter {
+  final List<ProLine> savedLines;
+  final Offset? firstPoint;
+  final Offset? movingPoint;
+  final Color previewColor;
+  final double previewWidth;
+  final String previewStyle;
+  final bool previewArrow;
+
+  ProDrawingPainter({
+    required this.savedLines, required this.firstPoint, required this.movingPoint,
+    required this.previewColor, required this.previewWidth, required this.previewStyle, required this.previewArrow
+  });
+
+  void _drawLineObject(Canvas canvas, Offset p1, Offset p2, Color co, double w, String style, bool isArrow) {
+    Paint paint = Paint()..color = co..strokeWidth = w..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
+
+    if (style == "dashed") {
+      double distance = (p2 - p1).distance;
+      if (distance > 0) {
+        double dashWidth = 8, dashSpace = 4;
+        double dx = (p2.dx - p1.dx) / distance;
+        double dy = (p2.dy - p1.dy) / distance;
+        double currentDist = 0;
+        while (currentDist < distance) {
+          double x1 = p1.dx + dx * currentDist;
+          double y1 = p1.dy + dy * currentDist;
+          currentDist += dashWidth;
+          if (currentDist > distance) currentDist = distance;
+          canvas.drawLine(Offset(x1, y1), Offset(p1.dx + dx * currentDist, p1.dy + dy * currentDist), paint);
+          currentDist += dashSpace;
+        }
+      }
+    } else {
+      canvas.drawLine(p1, p2, paint);
+    }
+
+    if (isArrow) {
+      double angle = math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
+      Paint arrowPaint = Paint()..color = co..style = PaintingStyle.fill;
+      Path arrowPath = Path()
+        ..moveTo(p2.dx, p2.dy)
+        ..lineTo(p2.dx - 14 * math.cos(angle - math.PI / 6), p2.dy - 14 * math.sin(angle - math.PI / 6))
+        ..lineTo(p2.dx - 14 * math.cos(angle + math.PI / 6), p2.dy - 14 * math.sin(angle + math.PI / 6))
+        ..close();
+      canvas.drawPath(arrowPath, arrowPaint);
+    }
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var line in savedLines) {
+      _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
+    }
+    if (firstPoint != null && movingPoint != null) {
+      _drawLineObject(canvas, firstPoint!, movingPoint!, previewColor.withOpacity(0.6), previewWidth, previewStyle, previewArrow);
+      canvas.drawCircle(firstPoint!, 4, Paint()..color = Colors.white);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
