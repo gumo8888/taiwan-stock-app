@@ -24,8 +24,8 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (完美修復 createState 拼字錯誤)
-          cat << 'EOF' > lib/main.dart
+          # 1. 建立完美的 Dart 核心主程式 (使用 "EOF" 鎖定，100% 防止錢字號被誤吞)
+          cat << "EOF" > lib/main.dart
           import 'dart:convert';
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
@@ -102,14 +102,14 @@ jobs:
                   _webViewController.runJavaScript("renderChartData('$jsonString')");
                 }
               } catch (e) {
-                debugPrint("抓取個股失敗: \$e");
+                debugPrint("抓取個股失敗: $e");
               }
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(title: Text("\$_currentStockId \$_currentStockName")),
+                appBar: AppBar(title: Text("$_currentStockId $_currentStockName")),
                 drawer: Drawer(
                   child: ListView(
                     padding: EdgeInsets.zero,
@@ -149,7 +149,7 @@ jobs:
                               style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
                               onPressed: () {
                                 setState(() { _isDrawingMode = !_isDrawingMode; });
-                                _webViewController.runJavaScript("setDrawingMode(\$_isDrawingMode, 'line', '#d63031', 2)");
+                                _webViewController.runJavaScript("setDrawingMode($_isDrawingMode, 'line', '#d63031', 2)");
                               },
                               child: Text(_isDrawingMode ? "關閉畫線" : "開啟畫線"),
                             ),
@@ -166,7 +166,7 @@ jobs:
 
           # 2. 建立網頁資產檔案 (assets/chart.html)
           mkdir -p assets
-          cat << 'EOF' > assets/chart.html
+          cat << "EOF" > assets/chart.html
           <!DOCTYPE html>
           <html>
           <head>
@@ -256,7 +256,7 @@ jobs:
           EOF
 
           # 3. 覆寫配置文件 pubspec.yaml
-          cat << 'EOF' > pubspec.yaml
+          cat << "EOF" > pubspec.yaml
           name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
           publish_to: "none"
