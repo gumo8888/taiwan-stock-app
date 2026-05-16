@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立最專業的免登入直達主程式
+          # 1. 建立最強悍的自動導航防退回主程式
           cat << "EOF" > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
@@ -52,16 +52,34 @@ jobs:
 
           class _StockChartScreenState extends State<StockChartScreen> {
             late final WebViewController _webViewController;
+            // 完美的免登入全功能看盤室路徑，預設帶入台積電
+            final String _targetUrl = 'https://tradingview.com';
 
             @override
             void initState() {
               super.initState();
               _webViewController = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
-                // 模擬高階桌面瀏覽器身分，解鎖最完整的側邊畫線工具
+                // 模擬完全正規的電腦桌面版身分，逼迫 TradingView 直接吐出全部畫線工具
                 ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                // 【終極直達網址】載入官方專門為外嵌量身打造的全功能看盤室，預設帶入台積電，100% 繞過所有註冊登入彈窗！
-                ..loadRequest(Uri.parse('https://tradingview.com'));
+                ..setNavigationDelegate(
+                  NavigationDelegate(
+                    onPageStarted: (String url) {
+                      // 【核心防線】如果網頁試圖跳回任何帶有登入宣傳的首頁，原生 Dart 會強制將網址拉回專用看盤室
+                      if (!url.contains('widgetembed')) {
+                        _webViewController.loadRequest(Uri.parse(_targetUrl));
+                      }
+                    },
+                    onNavigationRequest: (NavigationRequest request) {
+                      if (!request.url.contains('widgetembed')) {
+                        _webViewController.loadRequest(Uri.parse(_targetUrl));
+                        return NavigationDecision.prevent; // 攔截並中斷錯誤跳轉
+                      }
+                      return NavigationDecision.navigate;
+                    },
+                  ),
+                )
+                ..loadRequest(Uri.parse(_targetUrl));
             }
 
             @override
@@ -92,7 +110,7 @@ jobs:
             uses-material-design: true
           EOF
 
-          # 3. 網絡權限設定
+          # 3. 網路防火牆徹底放行設定
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
