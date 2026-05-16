@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (加入 isEmpty 核心防禦與 pts[0] 語法修正)
+          # 1. 建立完美的 Dart 核心主程式 (使用指針反覆運算技術，100% 拔除中括號，徹底根除 Linux 字元誤吞死穴)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,13 +348,19 @@ jobs:
                 }
               }
 
-              // 【核心防線修復】加入安全閥檢查並改用 pts[0]，確保數據極端情況下 100% 通過 AOT 語法安全編譯
+              // 【終極修復】完全使用 for-in 代碼迭代器，不包含任何括號與索引，彻底根除 Linux 字元誤刪盲區
               void drawMA(List<Offset> pts, Color c) {
-                if (pts.isEmpty || pts.length < 2) return;
+                if (pts.isEmpty) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-                Path path = Path()..moveTo(pts[0].dx, pts[0].dy);
-                for (int i = 1; i < pts.length; i++) {
-                  path.lineTo(pts[i].dx, pts[i].dy);
+                Path path = Path();
+                bool isFirst = true;
+                for (var pt in pts) {
+                  if (isFirst) {
+                    path.moveTo(pt.dx, pt.dy);
+                    isFirst = false;
+                  } else {
+                    path.lineTo(pt.dx, pt.dy);
+                  }
                 }
                 canvas.drawPath(path, p);
               }
@@ -416,8 +422,8 @@ jobs:
 
             @override
             void paint(Canvas canvas, Size size) {
-              for (int i = 0; i < savedLines.length; i++) {
-                var line = savedLines[i];
+              // 繪圖同樣採指針遍歷，極速流暢
+              for (var line in savedLines) {
                 _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
               }
               if (firstPoint != null && movingPoint != null) {
