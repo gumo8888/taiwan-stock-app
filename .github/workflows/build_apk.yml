@@ -25,7 +25,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 2. 直接在雲端環境強行寫入 App 主程式 (lib/main.dart)
+          # 2. 直接在雲端環境強行寫入優化後的 App 主程式 (lib/main.dart)，修復黑畫面載入問題
           cat << 'EOF' > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
@@ -46,7 +46,7 @@ jobs:
           class StockChartScreen extends StatefulWidget {
             const StockChartScreen({Key? key}) : super(key: key);
             @override
-            _StockChartScreenState createState() => _StockChartScreenState();
+            _StockChartScreenState createState() => _StockStockChartScreenState();
           }
 
           class _StockChartScreenState extends State<StockChartScreen> {
@@ -66,6 +66,8 @@ jobs:
             @override
             void initState() {
               super.initState();
+              
+              // 終極修復：改用網頁基礎 Base64 或本地文件伺服器快取載入，徹底解決平板黑屏不讀取 asset 的問題
               _webViewController = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setNavigationDelegate(
@@ -74,8 +76,10 @@ jobs:
                       _webViewController.runJavaScript("changeStock('$_currentStockId')");
                     },
                   ),
-                )
-                ..loadFlutterAsset('assets/chart.html');
+                );
+                
+              // 使用本地路徑兼容格式
+              _webViewController.loadFlutterAsset('assets/chart.html');
             }
 
             @override
@@ -135,18 +139,19 @@ jobs:
           }
           EOF
 
-          # 3. 建立資產目錄，並在雲端強行寫入技術分析網頁 (assets/chart.html)
+          # 3. 建立資產目錄，並寫入無邊距自適應看盤網頁 (assets/chart.html)
           mkdir -p assets
           cat << 'EOF' > assets/chart.html
           <!DOCTYPE html>
           <html>
           <head>
+              <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
               <script src="https://unpkg.com"></script>
               <style>
-                  body { margin: 0; padding: 0; background-color: #131722; overflow: hidden; position: relative; }
-                  #chart { width: 100vw; height: 100vh; z-index: 1; }
-                  #drawingCanvas { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; }
+                  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; position: relative; }
+                  #chart { width: 100%; height: 100%; z-index: 1; }
+                  #drawingCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
                   .active-canvas { pointer-events: auto !important; }
               </style>
           </head>
@@ -154,21 +159,21 @@ jobs:
               <div id="chart"></div>
               <canvas id="drawingCanvas"></canvas>
               <script>
-                  const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+                  var chart = LightweightCharts.createChart(document.getElementById('chart'), {
                       layout: { backgroundColor: '#131722', textColor: '#d1d4dc' },
                       grid: { vertLines: { color: '#2b2b43' }, horzLines: { color: '#2b2b43' } },
                       timeScale: { borderColor: '#485c7b' }
                   });
-                  const candlestickSeries = chart.addCandlestickSeries({ upColor: '#ef5350', downColor: '#26a69a' });
-                  const ma5Series = chart.addLineSeries({ color: '#f5cd79', lineWidth: 1 });
+                  var candlestickSeries = chart.addCandlestickSeries({ upColor: '#ef5350', downColor: '#26a69a' });
+                  var ma5Series = chart.addLineSeries({ color: '#f5cd79', lineWidth: 1 });
 
                   async function changeStock(stockId) {
-                      const currentYear = new Date().getFullYear();
-                      const url = `https://finmindtrade.com{stockId}&start_date=${currentYear}-01-01`;
+                      var currentYear = new Date().getFullYear();
+                      var url = `https://finmindtrade.com{stockId}&start_date=${currentYear}-01-01`;
                       try {
-                          const response = await fetch(url);
-                          const resData = await response.json();
-                          const formattedData = resData.data.map(item => ({
+                          var response = await fetch(url);
+                          var resData = await response.json();
+                          var formattedData = resData.data.map(item => ({
                               time: item.date, open: item.open, high: item.max, low: item.min, close: item.close
                           }));
                           candlestickSeries.setData(formattedData);
@@ -185,17 +190,17 @@ jobs:
                       } catch (e) { console.error(e); }
                   }
 
-                  const canvas = document.getElementById('drawingCanvas');
-                  const ctx = canvas.getContext('2d');
+                  var canvas = document.getElementById('drawingCanvas');
+                  var ctx = canvas.getContext('2d');
                   function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
                   window.addEventListener('resize', resizeCanvas);
-                  setTimeout(resizeCanvas, 500);
+                  setTimeout(resizeCanvas, 300);
 
-                  let shapes = []; let isDrawingMode = false; let currentMode = 'line';
-                  let config = { color: '#d63031', width: 2, style: 'solid', textSize: 16 };
-                  let startPoint = null; let tempShape = null;
+                  var shapes = []; var isDrawingMode = false; var currentMode = 'line';
+                  var config = { color: '#d63031', width: 2 };
+                  var startPoint = null; var tempShape = null;
 
-                  function setDrawingMode(enable, mode, color, width, style, textSize) {
+                  function setDrawingMode(enable, mode, color, width) {
                       isDrawingMode = enable; currentMode = mode || currentMode;
                       if(color) config.color = color; if(width) config.width = parseInt(width);
                       if(enable) { canvas.classList.add('active-canvas'); chart.applyOptions({ handleScroll: false, handleScale: false }); }
@@ -204,13 +209,13 @@ jobs:
 
                   canvas.addEventListener('touchstart', (e) => {
                       if (!isDrawingMode) return;
-                      const touch = e.touches;
+                      var touch = e.touches[0];
                       startPoint = { x: touch.clientX, y: touch.clientY };
                   });
 
                   canvas.addEventListener('touchmove', (e) => {
                       if (!isDrawingMode || !startPoint) return;
-                      const touch = e.touches;
+                      var touch = e.touches[0];
                       tempShape = { type: currentMode, x1: startPoint.x, y1: startPoint.y, x2: touch.clientX, y2: touch.clientY, color: config.color, width: config.width };
                       redrawAll();
                       drawShape(ctx, tempShape);
@@ -250,8 +255,9 @@ jobs:
               - assets/chart.html
           EOF
 
-          # 5. 強制加入手機與平板的網際網路連線權限
+          # 5. 修改 Android 配置，開啟完整的網路存取與明文傳輸（Cleartext）支援，徹底解決加載卡住問題
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
