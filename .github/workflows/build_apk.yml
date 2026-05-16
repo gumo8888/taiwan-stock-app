@@ -21,14 +21,15 @@ jobs:
 
       - name: Force Generate App Infrastructure
         run: |
-          # 1. 強制清空目前目錄，由官方指令初始化 100% 正確的目錄結構
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 2. 直接在雲端環境強行寫入優化後的 App 主程式 (lib/main.dart)，修復黑畫面載入問題
+          # 1. 建立完美的 Dart 核心主程式 (完美修復 createState 拼字錯誤)
           cat << 'EOF' > lib/main.dart
+          import 'dart:convert';
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
+          import 'package:http/http.dart' as http;
 
           void main() => runApp(const TaiwanStockApp());
 
@@ -46,12 +47,13 @@ jobs:
           class StockChartScreen extends StatefulWidget {
             const StockChartScreen({Key? key}) : super(key: key);
             @override
-            _StockChartScreenState createState() => _StockStockChartScreenState();
+            _StockChartScreenState createState() => _StockChartScreenState();
           }
 
           class _StockChartScreenState extends State<StockChartScreen> {
             late final WebViewController _webViewController;
             bool _isDrawingMode = false;
+            bool _isPageFinished = false;
             String _currentStockId = "2330";
             String _currentStockName = "台積電";
 
@@ -66,26 +68,48 @@ jobs:
             @override
             void initState() {
               super.initState();
-              
-              // 終極修復：改用網頁基礎 Base64 或本地文件伺服器快取載入，徹底解決平板黑屏不讀取 asset 的問題
               _webViewController = WebViewController()
                 ..setJavaScriptMode(JavaScriptMode.unrestricted)
                 ..setNavigationDelegate(
                   NavigationDelegate(
                     onPageFinished: (String url) {
-                      _webViewController.runJavaScript("changeStock('$_currentStockId')");
+                      _isPageFinished = true;
+                      _fetchAndInjectStock(_currentStockId);
                     },
                   ),
-                );
-                
-              // 使用本地路徑兼容格式
-              _webViewController.loadFlutterAsset('assets/chart.html');
+                )
+                ..loadFlutterAsset('assets/chart.html');
+            }
+
+            Future<void> _fetchAndInjectStock(String stockId) async {
+              if (!_isPageFinished) return;
+              final currentYear = DateTime.now().year;
+              final url = Uri.parse('https://finmindtrade.com');
+              
+              try {
+                final response = await http.get(url);
+                if (response.statusCode == 200) {
+                  final List resData = json.decode(response.body)['data'];
+                  final formattedData = resData.map((item) => {
+                    'time': item['date'],
+                    'open': item['open'],
+                    'high': item['max'],
+                    'low': item['min'],
+                    'close': item['close']
+                  }).toList();
+
+                  final jsonString = json.encode(formattedData);
+                  _webViewController.runJavaScript("renderChartData('$jsonString')");
+                }
+              } catch (e) {
+                debugPrint("抓取個股失敗: \$e");
+              }
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                appBar: AppBar(title: Text("$_currentStockId $_currentStockName")),
+                appBar: AppBar(title: Text("\$_currentStockId \$_currentStockName")),
                 drawer: Drawer(
                   child: ListView(
                     padding: EdgeInsets.zero,
@@ -104,7 +128,8 @@ jobs:
                             _currentStockName = stock['name']!;
                             _isDrawingMode = false;
                           });
-                          _webViewController.runJavaScript("changeStock('$_currentStockId')");
+                          _fetchAndInjectStock(_currentStockId);
+                          _webViewController.runJavaScript("setDrawingMode(false)");
                           Navigator.pop(context);
                         },
                       )),
@@ -124,7 +149,7 @@ jobs:
                               style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
                               onPressed: () {
                                 setState(() { _isDrawingMode = !_isDrawingMode; });
-                                _webViewController.runJavaScript("setDrawingMode($_isDrawingMode, 'line', '#d63031', 2, 'solid', 16)");
+                                _webViewController.runJavaScript("setDrawingMode(\$_isDrawingMode, 'line', '#d63031', 2)");
                               },
                               child: Text(_isDrawingMode ? "關閉畫線" : "開啟畫線"),
                             ),
@@ -139,7 +164,7 @@ jobs:
           }
           EOF
 
-          # 3. 建立資產目錄，並寫入無邊距自適應看盤網頁 (assets/chart.html)
+          # 2. 建立網頁資產檔案 (assets/chart.html)
           mkdir -p assets
           cat << 'EOF' > assets/chart.html
           <!DOCTYPE html>
@@ -167,27 +192,19 @@ jobs:
                   var candlestickSeries = chart.addCandlestickSeries({ upColor: '#ef5350', downColor: '#26a69a' });
                   var ma5Series = chart.addLineSeries({ color: '#f5cd79', lineWidth: 1 });
 
-                  async function changeStock(stockId) {
-                      var currentYear = new Date().getFullYear();
-                      var url = `https://finmindtrade.com{stockId}&start_date=${currentYear}-01-01`;
-                      try {
-                          var response = await fetch(url);
-                          var resData = await response.json();
-                          var formattedData = resData.data.map(item => ({
-                              time: item.date, open: item.open, high: item.max, low: item.min, close: item.close
-                          }));
-                          candlestickSeries.setData(formattedData);
-                          
-                          let ma5Data = [];
-                          for (let i = 0; i < formattedData.length; i++) {
-                              if (i < 4) continue;
-                              let sum = 0;
-                              for (let j = 0; j < 5; j++) { sum += formattedData[i - j].close; }
-                              ma5Data.push({ time: formattedData[i].time, value: sum / 5 });
-                          }
-                          ma5Series.setData(ma5Data);
-                          chart.timeScale().fitContent();
-                      } catch (e) { console.error(e); }
+                  function renderChartData(jsonString) {
+                      var formattedData = JSON.parse(jsonString);
+                      candlestickSeries.setData(formattedData);
+                      
+                      let ma5Data = [];
+                      for (let i = 0; i < formattedData.length; i++) {
+                          if (i < 4) continue;
+                          let sum = 0;
+                          for (let j = 0; j < 5; j++) { sum += formattedData[i - j].close; }
+                          ma5Data.push({ time: formattedData[i].time, value: sum / 5 });
+                      }
+                      ma5Series.setData(ma5Data);
+                      chart.timeScale().fitContent();
                   }
 
                   var canvas = document.getElementById('drawingCanvas');
@@ -209,13 +226,13 @@ jobs:
 
                   canvas.addEventListener('touchstart', (e) => {
                       if (!isDrawingMode) return;
-                      var touch = e.touches[0];
+                      var touch = e.touches;
                       startPoint = { x: touch.clientX, y: touch.clientY };
                   });
 
                   canvas.addEventListener('touchmove', (e) => {
                       if (!isDrawingMode || !startPoint) return;
-                      var touch = e.touches[0];
+                      var touch = e.touches;
                       tempShape = { type: currentMode, x1: startPoint.x, y1: startPoint.y, x2: touch.clientX, y2: touch.clientY, color: config.color, width: config.width };
                       redrawAll();
                       drawShape(ctx, tempShape);
@@ -238,7 +255,7 @@ jobs:
           </html>
           EOF
 
-          # 4. 強制寫入對應的 pubspec.yaml 設定檔
+          # 3. 覆寫配置文件 pubspec.yaml
           cat << 'EOF' > pubspec.yaml
           name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
@@ -250,12 +267,13 @@ jobs:
             flutter:
               sdk: flutter
             webview_flutter: ^4.4.2
+            http: ^1.1.0
           flutter:
             assets:
               - assets/chart.html
           EOF
 
-          # 5. 修改 Android 配置，開啟完整的網路存取與明文傳輸（Cleartext）支援，徹底解決加載卡住問題
+          # 4. 寫入手機、平板連網基本權限與防止黑屏白名單設定
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
