@@ -19,26 +19,26 @@ jobs:
         with:
           channel: 'stable'
 
-      - name: Configure Android Permissions
+      - name: Auto Re-create Android Infrastructure
         run: |
-          # 建立與修復標準的原生 Android 網路白名單權限
-          mkdir -p android/app/src/main
-          echo '<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://android.com">
-              <uses-permission android:name="android.permission.INTERNET"/>
-              <application android:label="台股專業看盤大師" android:usesCleartextTraffic="true">
-                  <activity android:name="io.flutter.embedding.android.FlutterActivity"
-                            android:exported="true"
-                            android:launchMode="singleTop"
-                            android:theme="@android:style/Theme.Black.NoTitleBar"
-                            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN"/>
-                          <category android:name="android.intent.category.LAUNCHER"/>
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>' > android/app/src/main/AndroidManifest.xml
+          # 1. 雲端安全暫存您在網頁上手動儲存的完全體 lib/main.dart 與 pubspec.yaml
+          mkdir -p /tmp/backup_core
+          [ -f lib/main.dart ] && cp lib/main.dart /tmp/backup_core/main.dart
+          [ -f pubspec.yaml ] && cp pubspec.yaml /tmp/backup_core/pubspec.yaml
+
+          # 2. 清除雲端目前缺檔的舊目錄，但絕對保留重要的 .github 自動化配置
+          find . -maxdepth 1 ! -name '.' ! -name '..' ! -name '.github' ! -name '.git' -exec rm -rf {} +
+
+          # 3. 呼叫官方命令，在雲端一秒初始化一個 100% 結構完整、絕不報錯的正規看盤空殼專案
+          flutter create --org com.example --project-name taiwan_stock_app .
+
+          # 4. 將您寫好的完全體核心主程式與設定檔精準還原覆蓋進去
+          [ -f /tmp/backup_core/main.dart ] && cp /tmp/backup_core/main.dart lib/main.dart
+          [ -f /tmp/backup_core/pubspec.yaml ] && cp /tmp/backup_core/pubspec.yaml pubspec.yaml
+
+          # 5. 自動修改全新生成的 Android 清單檔案，注入手機與平板必備的明文連網放行權限
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
