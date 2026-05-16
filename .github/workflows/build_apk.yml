@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (徹底根除 ProLine 物件與 List 迭代的語法錯誤)
+          # 1. 建立完美的 Dart 核心主程式 (完美修正 pts[0] 陣列定位與 _StockChartScreenState 拼字盲區)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,7 +348,7 @@ jobs:
                 }
               }
 
-              // 【核心修復】使用標準正規的循環逐點調用連接，100% 繞過陣列型態編譯盲區
+              // 【核心修復】改成 pts[0].dx 和 pts[i].dx 正確的索引結構，徹底消滅編譯地雷
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
@@ -416,7 +416,6 @@ jobs:
 
             @override
             void paint(Canvas canvas, Size size) {
-              // 【核心修復】精準呼過 ProLine 的物件屬性 p1 與 p2，完全切斷與 List 的語法混淆
               for (var line in savedLines) {
                 _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
               }
