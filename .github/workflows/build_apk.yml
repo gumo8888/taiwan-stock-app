@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式
+          # 1. 建立完美的 Dart 核心主程式 (改用全新的 loadHtmlString 記憶體直接加載機制)
           cat << "EOF" > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
@@ -61,6 +61,54 @@ jobs:
               {"id": "2882", "name": "國泰金", "symbol": "TWSE:2882"},
             ];
 
+            // 完美的內嵌 HTML 技術分析網頁代碼（直接在記憶體中被 Dart 強制載入，完美避開手機資產權限限制）
+            final String _htmlContent = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+                <style>
+                    html, body, #tv_chart_container { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }
+                </style>
+            </head>
+            <body>
+                <div id="tv_chart_container"></div>
+                <script type="text/javascript" src="https://tradingview.com"></script>
+                <script type="text/javascript">
+                    var widget = null;
+                    function createWidget(symbolName) {
+                        document.getElementById('tv_chart_container').innerHTML = '';
+                        widget = new TradingView.widget({
+                            "width": "100%",
+                            "height": "100%",
+                            "symbol": symbolName,
+                            "interval": "D",
+                            "timezone": "Asia/Taipei",
+                            "theme": "dark",
+                            "style": "1",
+                            "locale": "zh_TW",
+                            "toolbar_bg": "#131722",
+                            "enable_publishing": false,
+                            "hide_side_toolbar": false,
+                            "allow_symbol_change": false,
+                            "container_id": "tv_chart_container",
+                            "studies": [
+                                "MAExp@tv-basicstudies"
+                            ]
+                        });
+                    }
+                    function changeTradingViewSymbol(symbolName) {
+                        createWidget(symbolName);
+                    }
+                    window.onload = function() {
+                        createWidget("TWSE:2330");
+                    };
+                </script>
+            </body>
+            </html>
+            """;
+
             @override
             void initState() {
               super.initState();
@@ -72,8 +120,10 @@ jobs:
                       _webViewController.runJavaScript("changeTradingViewSymbol('TWSE:2330')");
                     },
                   ),
-                )
-                ..loadFlutterAsset('assets/chart.html');
+                );
+              
+              // 【核心修正】直接將 HTML 字串當作最高安全級別的線上網頁載入
+              _webViewController.loadHtmlString(_htmlContent);
             }
 
             @override
@@ -110,61 +160,7 @@ jobs:
           }
           EOF
 
-          # 2. 建立內嵌【100% 全加密安全載入網頁】(assets/chart.html)
-          mkdir -p assets
-          cat << "EOF" > assets/chart.html
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-              <style>
-                  html, body, #tv_chart_container { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #131722; overflow: hidden; }
-              </style>
-          </head>
-          <body>
-              <div id="tv_chart_container"></div>
-
-              <!-- 關鍵修復：全面強制採用 https 安全加密協定，破除平板網頁封鎖 -->
-              <script type="text/javascript" src="https://tradingview.com"></script>
-              <script type="text/javascript">
-                  var widget = null;
-
-                  function createWidget(symbolName) {
-                      document.getElementById('tv_chart_container').innerHTML = '';
-                      widget = new TradingView.widget({
-                          "width": "100%",
-                          "height": "100%",
-                          "symbol": symbolName,
-                          "interval": "D",
-                          "timezone": "Asia/Taipei",
-                          "theme": "dark",
-                          "style": "1",
-                          "locale": "zh_TW",
-                          "toolbar_bg": "#131722",
-                          "enable_publishing": false,
-                          "hide_side_toolbar": false, // 開啟側邊專業畫線工具列
-                          "allow_symbol_change": false,
-                          "container_id": "tv_chart_container",
-                          "studies": [
-                              "MAExp@tv-basicstudies"
-                          ]
-                      });
-                  }
-
-                  function changeTradingViewSymbol(symbolName) {
-                      createWidget(symbolName);
-                  }
-
-                  window.onload = function() {
-                      createWidget("TWSE:2330");
-                  };
-              </script>
-          </body>
-          </html>
-          EOF
-
-          # 3. 覆寫配置文件 pubspec.yaml
+          # 2. 建立配置文件 pubspec.yaml (由於採用字串注入，資產宣告可完全清空，編譯乾淨俐落)
           cat << "EOF" > pubspec.yaml
           name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
@@ -177,11 +173,10 @@ jobs:
               sdk: flutter
             webview_flutter: ^4.4.2
           flutter:
-            assets:
-              - assets/chart.html
+            uses-material-design: true
           EOF
 
-          # 4. 寫入基本權放行與最高層級明文流量支援設定
+          # 3. 寫入基本權放行與最高層級明文流量支援設定
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
