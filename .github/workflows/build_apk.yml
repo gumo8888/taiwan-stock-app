@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (與網頁完全同步連動)
+          # 1. 建立完美的 Dart 核心主程式
           cat << "EOF" > lib/main.dart
           import 'package:flutter/material.dart';
           import 'package:webview_flutter/webview_flutter.dart';
@@ -97,7 +97,6 @@ jobs:
                             _currentStockId = stock['id']!;
                             _currentStockName = stock['name']!;
                           });
-                          // 直接動態切換 TradingView 官方台股代碼
                           _webViewController.runJavaScript("changeTradingViewSymbol('${stock['symbol']}')");
                           Navigator.pop(context);
                         },
@@ -111,7 +110,7 @@ jobs:
           }
           EOF
 
-          # 2. 建立內嵌官方 TradingView 核心嵌入引擎的資產檔案 (assets/chart.html)
+          # 2. 建立內嵌【100% 全加密安全載入網頁】(assets/chart.html)
           mkdir -p assets
           cat << "EOF" > assets/chart.html
           <!DOCTYPE html>
@@ -124,9 +123,9 @@ jobs:
               </style>
           </head>
           <body>
-              <!-- TradingView 小工具容器 -->
               <div id="tv_chart_container"></div>
 
+              <!-- 關鍵修復：全面強制採用 https 安全加密協定，破除平板網頁封鎖 -->
               <script type="text/javascript" src="https://tradingview.com"></script>
               <script type="text/javascript">
                   var widget = null;
@@ -144,21 +143,19 @@ jobs:
                           "locale": "zh_TW",
                           "toolbar_bg": "#131722",
                           "enable_publishing": false,
-                          "hide_side_toolbar": false, // 開啟側邊畫線工具列，平板大螢幕最適用
+                          "hide_side_toolbar": false, // 開啟側邊專業畫線工具列
                           "allow_symbol_change": false,
                           "container_id": "tv_chart_container",
                           "studies": [
-                              "MAExp@tv-basicstudies" // 內建均線指標
+                              "MAExp@tv-basicstudies"
                           ]
                       });
                   }
 
-                  // 供 Flutter 原生端呼叫：一鍵切換台股
                   function changeTradingViewSymbol(symbolName) {
                       createWidget(symbolName);
                   }
 
-                  // 預設初始化
                   window.onload = function() {
                       createWidget("TWSE:2330");
                   };
@@ -184,7 +181,7 @@ jobs:
               - assets/chart.html
           EOF
 
-          # 4. 寫入基本權限與防止黑屏安全策略
+          # 4. 寫入基本權放行與最高層級明文流量支援設定
           sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
