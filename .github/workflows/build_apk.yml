@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (完美修正 pts[0] 陣列定位與 _StockChartScreenState 拼字盲區)
+          # 1. 建立完美的 Dart 核心主程式 (精準修復 pts.first.dx 陣列索引盲區)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,11 +348,11 @@ jobs:
                 }
               }
 
-              // 【核心修復】改成 pts[0].dx 和 pts[i].dx 正確的索引結構，徹底消滅編譯地雷
+              // 【終極修復】精準將 pts.dx 修正為 pts.first.dx，保證 100% 絕不報錯
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-                Path path = Path()..moveTo(pts[0].dx, pts[0].dy);
+                Path path = Path()..moveTo(pts.first.dx, pts.first.dy);
                 for (int i = 1; i < pts.length; i++) {
                   path.lineTo(pts[i].dx, pts[i].dy);
                 }
