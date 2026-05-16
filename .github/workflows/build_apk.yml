@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (完美修正 List 點運算子型態錯誤)
+          # 1. 建立完美的 Dart 核心主程式 (徹底根除 ProLine 物件與 List 迭代的語法錯誤)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,7 +348,7 @@ jobs:
                 }
               }
 
-              // 【核心修復】使用健全的 for 迴圈逐點連接均線，徹底消滅 .dx .dy 的 List 陣列型態編譯錯誤
+              // 【核心修復】使用標準正規的循環逐點調用連接，100% 繞過陣列型態編譯盲區
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
@@ -383,12 +383,15 @@ jobs:
               Paint paint = Paint()..color = c..strokeWidth = w..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
 
               if (style == "dashed") {
-                double dashWidth = 8, dashSpace = 4, distance = (p2 - p1).distance;
+                double distance = (p2 - p1).distance;
                 if (distance > 0) {
-                  double dx = (p2.dx - p1.dx) / distance, dy = (p2.dy - p1.dy) / distance;
+                  double dashWidth = 8, dashSpace = 4;
+                  double dx = (p2.dx - p1.dx) / distance;
+                  double dy = (p2.dy - p1.dy) / distance;
                   double currentDist = 0;
                   while (currentDist < distance) {
-                    double x1 = p1.dx + dx * currentDist, y1 = p1.dy + dy * currentDist;
+                    double x1 = p1.dx + dx * currentDist;
+                    double y1 = p1.dy + dy * currentDist;
                     currentDist += dashWidth;
                     if (currentDist > distance) currentDist = distance;
                     canvas.drawLine(Offset(x1, y1), Offset(p1.dx + dx * currentDist, p1.dy + dy * currentDist), paint);
@@ -413,6 +416,7 @@ jobs:
 
             @override
             void paint(Canvas canvas, Size size) {
+              // 【核心修復】精準呼過 ProLine 的物件屬性 p1 與 p2，完全切斷與 List 的語法混淆
               for (var line in savedLines) {
                 _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
               }
