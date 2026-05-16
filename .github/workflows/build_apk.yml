@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立終極完全體 Dart 主程式 (整合量能、多週期、2點磁吸畫線與自訂 MA)
+          # 1. 建立完美的 Dart 核心主程式 (完美修復 MouseRegion 語法型態阻擋)
           cat << "EOF" > lib/main.dart
           import 'dart:math';
           import 'package:flutter/material.dart';
@@ -44,13 +44,12 @@ jobs:
             }
           }
 
-          // 畫線物件資料結構
           class ProLine {
             Offset p1;
             Offset p2;
             Color color;
             double width;
-            String style; // 'solid', 'dashed'
+            String style; 
             bool isArrow;
             ProLine({
               required this.p1,
@@ -71,41 +70,36 @@ jobs:
           class _StockChartScreenState extends State<StockChartScreen> {
             String _currentStockId = "2330";
             String _currentStockName = "台積電";
-            String _currentPeriod = "日線"; // 月線, 週線, 日線, 4小時, 1小時, 5分
+            String _currentPeriod = "日線"; 
 
-            // 可自由輸入改變天數的 MA 設定
             int _maDay1 = 5;
             int _maDay2 = 20;
             final TextEditingController _maController1 = TextEditingController(text: "5");
             final TextEditingController _maController2 = TextEditingController(text: "20");
 
-            // 專業兩點畫線管理
             List<ProLine> _savedLines = [];
             Offset? _firstPoint;
             Offset? _currentMovingPoint;
             bool _isDrawingMode = false;
 
-            // 畫線樣式控制
             Color _selectedColor = const Color(0xFFef5350);
             double _selectedWidth = 2.0;
-            String _selectedStyle = "solid"; // solid, dashed
+            String _selectedStyle = "solid"; 
             bool _isArrowMode = false;
 
             final List<Color> _colors = [
-              const Color(0xFFef5350), const Color(0xFFff7675), const Color(0xFF8b0000), // 紅
-              const Color(0xFFfdcb6e), const Color(0xFFffeaa7), const Color(0xFFe1b12c), // 黃
-              const Color(0xFF0984e3), const Color(0xFF74b9ff), const Color(0xFF273c75), // 藍
-              const Color(0xFF00b894), const Color(0xFF55efc4), const Color(0xFF4c5144), // 綠
-              const Color(0xFFffffff), const Color(0xFFdfe6e9), const Color(0xFFb2bec3), // 白
-              const Color(0xFF34495e), const Color(0xFF7f8c8d), const Color(0xFF111111), // 黑
-              const Color(0xFF6c5ce7), const Color(0xFFa29bfe), const Color(0xFF4a148c), // 紫
+              const Color(0xFFef5350), const Color(0xFFff7675), const Color(0xFF8b0000), 
+              const Color(0xFFfdcb6e), const Color(0xFFffeaa7), const Color(0xFFe1b12c), 
+              const Color(0xFF0984e3), const Color(0xFF74b9ff), const Color(0xFF273c75), 
+              const Color(0xFF00b894), const Color(0xFF55efc4), const Color(0xFF4c5144), 
+              const Color(0xFFffffff), const Color(0xFFdfe6e9), const Color(0xFFb2bec3), 
+              const Color(0xFF34495e), const Color(0xFF7f8c8d), const Color(0xFF111111), 
+              const Color(0xFF6c5ce7), const Color(0xFFa29bfe), const Color(0xFF4a148c), 
             ];
 
-            // 根據不同週期生成動態量能與 K 線數據
             List<Map<String, dynamic>> _getPeriodData() {
               List<Map<String, dynamic>> list = [];
               double basePrice = _currentStockId == "2330" ? 950.0 : 180.0;
-              // 模擬不同週期的震盪幅度
               double volatility = _currentPeriod.contains("分") ? 3.0 : (_currentPeriod.contains("線") ? 40.0 : 15.0);
               Random rand = Random(int.parse(_currentStockId) + _currentPeriod.hashCode);
               
@@ -114,7 +108,7 @@ jobs:
                 double close = open + (rand.nextDouble() * volatility - (volatility / 2));
                 double high = max(open, close) + rand.nextDouble() * (volatility / 3);
                 double low = min(open, close) - rand.nextDouble() * (volatility / 3);
-                double volume = 2000 + rand.nextDouble() * 8000; // 模擬交易量
+                double volume = 2000 + rand.nextDouble() * 8000; 
                 list.add({'open': open, 'high': high, 'low': low, 'close': close, 'volume': volume});
                 basePrice = close;
               }
@@ -132,13 +126,12 @@ jobs:
                   actions: [
                     IconButton(
                       icon: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                      onPressed: () => setState(() { _savedLines.clear(); _firstPoint = null; }),
+                      onPressed: () => setState(() { _savedLines.clear(); _firstPoint = null; _currentMovingPoint = null; }),
                     )
                   ],
                 ),
                 body: Column(
                   children: [
-                    // 1. 頂部自訂 MA 天數輸入與週期切換列
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       color: const Color(0xFF1c2030),
@@ -170,7 +163,6 @@ jobs:
                             ),
                           ),
                           const Spacer(),
-                          // 週期下拉選單
                           DropdownButton<String>(
                             value: _currentPeriod,
                             items: ["月線", "週線", "日線", "4小時線", "小時線", "5分鐘線"].map((String value) {
@@ -181,8 +173,6 @@ jobs:
                         ],
                       ),
                     ),
-
-                    // 2. 主圖表渲染區 (K線 + MA + 量能 + 兩點磁吸直線圖層)
                     Expanded(
                       child: Stack(
                         children: [
@@ -191,17 +181,15 @@ jobs:
                               painter: AdvancedKLinePainter(data: stockData, ma1: _maDay1, ma2: _maDay2),
                             ),
                           ),
-                          // 兩點定位畫線觸控層
+                          // 【核心修復】全改用專注於手勢平移的 GestureDetector，100% 消除 MouseRegion 的型態編譯錯誤
                           Positioned.fill(
                             child: GestureDetector(
-                              onTapDown: _isDrawingMode ? (details) {
+                              onPanDown: _isDrawingMode ? (details) {
                                 setState(() {
                                   if (_firstPoint == null) {
-                                    // 點擊第一點
                                     _firstPoint = details.localPosition;
                                     _currentMovingPoint = details.localPosition;
                                   } else {
-                                    // 點擊第二點，直接鎖定並封裝儲存直線物件
                                     _savedLines.add(ProLine(
                                       p1: _firstPoint!,
                                       p2: details.localPosition,
@@ -210,26 +198,25 @@ jobs:
                                       style: _selectedStyle,
                                       isArrow: _isArrowMode,
                                     ));
-                                    _firstPoint = null; // 重置起點，準備畫下一條
+                                    _firstPoint = null; 
                                     _currentMovingPoint = null;
                                   }
                                 });
                               } : null,
-                              onSecondaryTap: () { setState(() { _firstPoint = null; _currentMovingPoint = null; }); },
-                              child: MouseRegion(
-                                onHover: _firstPoint != null ? (event) {
-                                  setState(() { _currentMovingPoint = event.localPosition; });
-                                } : null,
-                                child: CustomPaint(
-                                  painter: ProDrawingPainter(
-                                    savedLines: _savedLines,
-                                    firstPoint: _firstPoint,
-                                    movingPoint: _currentMovingPoint,
-                                    previewColor: _selectedColor,
-                                    previewWidth: _selectedWidth,
-                                    previewStyle: _selectedStyle,
-                                    previewArrow: _isArrowMode,
-                                  ),
+                              onPanUpdate: _isDrawingMode && _firstPoint != null ? (details) {
+                                setState(() {
+                                  _currentMovingPoint = details.localPosition;
+                                });
+                              } : null,
+                              child: CustomPaint(
+                                painter: ProDrawingPainter(
+                                  savedLines: _savedLines,
+                                  firstPoint: _firstPoint,
+                                  movingPoint: _currentMovingPoint,
+                                  previewColor: _selectedColor,
+                                  previewWidth: _selectedWidth,
+                                  previewStyle: _selectedStyle,
+                                  previewArrow: _isArrowMode,
                                 ),
                               ),
                             ),
@@ -237,8 +224,6 @@ jobs:
                         ],
                       ),
                     ),
-
-                    // 3. 底部專業工具箱
                     Container(
                       padding: const EdgeInsets.all(12),
                       color: const Color(0xFF1c2030),
@@ -251,11 +236,10 @@ jobs:
                               children: [
                                 ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
-                                  onPressed: () => setState(() { _isDrawingMode = !_isDrawingMode; _firstPoint = null; }),
+                                  onPressed: () => setState(() { _isDrawingMode = !_isDrawingMode; _firstPoint = null; _currentMovingPoint = null; }),
                                   icon: Icon(_isDrawingMode ? Icons.edit_off : Icons.edit, size: 14),
-                                  label: Text(_isDrawingMode ? "點擊第二點落筆" : "開啟2點畫線"),
+                                  label: Text(_isDrawingMode ? "拉曳線條並點選終點" : "開啟2點畫線"),
                                 ),
-                                // 線條樣式
                                 Row(
                                   children: [
                                     IconButton(
@@ -290,7 +274,6 @@ jobs:
                                   ),
                                 )),
                                 const Spacer(),
-                                // 色票
                                 ..._colors.take(7).map((color) => GestureDetector(
                                   onTap: () => setState(() => _selectedColor = color),
                                   child: Container(
@@ -314,7 +297,6 @@ jobs:
             }
           }
 
-          // 核心高級自繪技術引擎：上K線、中均線、下量能
           class AdvancedKLinePainter extends CustomPainter {
             final List<Map<String, dynamic>> data;
             final int ma1;
@@ -325,10 +307,7 @@ jobs:
             void paint(Canvas canvas, Size size) {
               if (data.isEmpty) return;
               
-              // 拆分上下視窗：上方 75% 為 K 線圖，下方 20% 為獨立量能圖
               double kHeight = size.height * 0.72;
-              double vTop = size.height * 0.78;
-              double vHeight = size.height * 0.20;
               double widthPerBar = size.width / data.length;
 
               double maxH = data.map((e) => e['high'] as double).reduce(max);
@@ -347,7 +326,6 @@ jobs:
                 double x = i * widthPerBar + (widthPerBar / 2);
                 double barW = widthPerBar * 0.7;
 
-                // 1. 繪製頂部 K 線
                 double getY(double p) => kHeight - ((p - minL) / priceRange * (kHeight - 30) + 15);
                 double oY = getY(item['open']);
                 double cY = getY(item['close']);
@@ -358,11 +336,9 @@ jobs:
                 canvas.drawLine(Offset(x, hY), Offset(x, lY), Paint()..color = barPaint.color..strokeWidth = 1.2);
                 canvas.drawRect(Rect.fromLTRB(x - barW/2, min(oY, cY), x + barW/2, max(oY, cY)), barPaint);
 
-                // 2. 繪製底部獨立交易量能圖
-                double vH = (item['volume'] / maxV) * vHeight;
+                double vH = (item['volume'] / maxV) * (size.height * 0.20);
                 canvas.drawRect(Rect.fromLTRB(x - barW/2, size.height - vH, x + barW/2, size.height), barPaint);
 
-                // 3. 動態計算自訂天數 MA1 與 MA2 軌跡
                 if (i >= ma1 - 1) {
                   double sum = 0; for (int j = 0; j < ma1; j++) { sum += data[i - j]['close']; }
                   ma1Points.add(Offset(x, getY(sum / ma1)));
@@ -373,22 +349,20 @@ jobs:
                 }
               }
 
-              // 渲染自訂雙均線
               void drawMA(List<Offset> pts, Color c) {
                 if(pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-                Path path = Path()..moveTo(pts.dx, pts.dy);
+                Path path = Path()..moveTo(pts[0].dx, pts[0].dy);
                 for(var pt in pts) { path.lineTo(pt.dx, pt.dy); }
                 canvas.drawPath(path, p);
               }
-              drawMA(ma1Points, const Color(0xFFf5cd79)); // MA1 黃線
-              drawMA(ma2Points, const Color(0xFF3dc1d3)); // MA2 藍線
+              drawMA(ma1Points, const Color(0xFFf5cd79)); 
+              drawMA(ma2Points, const Color(0xFF3dc1d3)); 
             }
             @override
             bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
           }
 
-          // 核心高階專業畫線引擎：2點成線、虛線、箭頭末端渲染
           class ProDrawingPainter extends CustomPainter {
             final List<ProLine> savedLines;
             final Offset? firstPoint;
@@ -407,7 +381,6 @@ jobs:
               Paint paint = Paint()..color = c..strokeWidth = w..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
 
               if (style == "dashed") {
-                // 原生虛線繪製演算法
                 double dashWidth = 8, dashSpace = 4, distance = (p2 - p1).distance, dx = (p2.dx - p1.dx) / distance, dy = (p2.dy - p1.dy) / distance;
                 double currentDist = 0;
                 while (currentDist < distance) {
@@ -421,7 +394,6 @@ jobs:
                 canvas.drawLine(p1, p2, paint);
               }
 
-              // 繪製末端精準方向箭頭
               if (isArrow) {
                 double angle = Math.atan2(p2.dy - p1.dy, p2.dx - p1.dx);
                 Paint arrowPaint = Paint()..color = c..style = PaintingStyle.fill;
@@ -436,14 +408,11 @@ jobs:
 
             @override
             void paint(Canvas canvas, Size size) {
-              // 1. 繪製所有已鎖定的直線
               for (var line in savedLines) {
                 _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
               }
-              // 2. 繪製當前動態拉拉拉的預覽直線
               if (firstPoint != null && movingPoint != null) {
                 _drawLineObject(canvas, firstPoint!, movingPoint!, previewColor.withOpacity(0.6), previewWidth, previewStyle, previewArrow);
-                // 輔助起點標示框
                 canvas.drawCircle(firstPoint!, 4, Paint()..color = Colors.white);
               }
             }
@@ -452,7 +421,7 @@ jobs:
           }
           EOF
 
-          # 2. 建立完美的配置文件 pubspec.yaml
+          # 2. 建立標準配置文件 pubspec.yaml
           cat << "EOF" > pubspec.yaml
           name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
