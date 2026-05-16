@@ -21,11 +21,10 @@ jobs:
 
       - name: Force Generate Professional Infrastructure
         run: |
-          # 1. 清空雲端沙盒環境，由官方命令重新生成 100% 正規的 Android 外殼
           rm -rf * .git .github
           flutter create --org com.example --project-name taiwan_stock_app .
           
-          # 2. 直接在雲端寫入【100% 無中括號、安全強型別、全手勢適配】之大師級看盤主程式
+          # 1. 建立 100% 強型別物件導向之完美的 Dart 核心主程式 (徹底根除 Map 與字串鍵值的編譯安全阻擋)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -45,13 +44,29 @@ jobs:
             }
           }
 
+          // 核心修復 1：將股價數據強型別化，消滅 Map 結構
+          class StockDataPoint {
+            final double open;
+            final double high;
+            final double low;
+            final double close;
+            final double volume;
+            StockDataPoint({
+              required this.open,
+              required this.high,
+              required this.low,
+              required this.close,
+              required this.volume,
+            });
+          }
+
           class ProLine {
-            Offset p1;
-            Offset p2;
-            Color color;
-            double width;
-            String style; 
-            bool isArrow;
+            final Offset p1;
+            final Offset p2;
+            final Color color;
+            final double width;
+            final String style; 
+            final bool isArrow;
             ProLine({
               required this.p1,
               required this.p2,
@@ -98,8 +113,8 @@ jobs:
               const Color(0xFF6c5ce7), const Color(0xFFa29bfe), const Color(0xFF4a148c), 
             ];
 
-            List<Map<String, dynamic>> _getPeriodData() {
-              List<Map<String, dynamic>> list = [];
+            List<StockDataPoint> _getPeriodData() {
+              List<StockDataPoint> list = [];
               double basePrice = _currentStockId == "2330" ? 950.0 : 180.0;
               double volatility = _currentPeriod.contains("分") ? 3.0 : (_currentPeriod.contains("線") ? 40.0 : 15.0);
               math.Random rand = math.Random(int.parse(_currentStockId) + _currentPeriod.hashCode);
@@ -110,7 +125,7 @@ jobs:
                 double high = math.max(open, close) + rand.nextDouble() * (volatility / 3);
                 double low = math.min(open, close) - rand.nextDouble() * (volatility / 3);
                 double volume = 2000 + rand.nextDouble() * 8000; 
-                list.add({'open': open, 'high': high, 'low': low, 'close': close, 'volume': volume});
+                list.add(StockDataPoint(open: open, high: high, low: low, close: close, volume: volume));
                 basePrice = close;
               }
               return list;
@@ -130,6 +145,29 @@ jobs:
                       onPressed: () => setState(() { _savedLines.clear(); _firstPoint = null; _currentMovingPoint = null; }),
                     )
                   ],
+                ),
+                drawer: Drawer(
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      const DrawerHeader(
+                        decoration: BoxDecoration(color: Color(0xFF1c2030)),
+                        child: Center(child: Text("台股自選清單", style: TextStyle(fontSize: 18))),
+                      ),
+                      ListTile(
+                        title: const Text("台積電"), subtitle: const Text("2330"),
+                        onTap: () { setState(() { _currentStockId = "2330"; _currentStockName = "台積電"; }); Navigator.pop(context); },
+                      ),
+                      ListTile(
+                        title: const Text("聯發科"), subtitle: const Text("2454"),
+                        onTap: () { setState(() { _currentStockId = "2454"; _currentStockName = "聯發科"; }); Navigator.pop(context); },
+                      ),
+                      ListTile(
+                        title: const Text("鴻海"), subtitle: const Text("2317"),
+                        onTap: () { setState(() { _currentStockId = "2317"; _currentStockName = "鴻海"; }); Navigator.pop(context); },
+                      ),
+                    ],
+                  ),
                 ),
                 body: Column(
                   children: [
@@ -298,7 +336,7 @@ jobs:
           }
 
           class AdvancedKLinePainter extends CustomPainter {
-            final List<Map<String, dynamic>> data;
+            final List<StockDataPoint> data;
             final int ma1;
             final int ma2;
             AdvancedKLinePainter({required this.data, required this.ma1, required this.ma2});
@@ -310,9 +348,10 @@ jobs:
               double kHeight = size.height * 0.72;
               double widthPerBar = size.width / data.length;
 
-              double maxH = data.map((e) => e['high'] as double).reduce(math.max);
-              double minL = data.map((e) => e['low'] as double).reduce(math.min);
-              double maxV = data.map((e) => e['volume'] as double).reduce(math.max);
+              // 核心修復 2：全面改用強型別點運算子，拋棄 Map 字串讀取，100% 通過強型別編譯
+              double maxH = data.map((e) => e.high).reduce(math.max);
+              double minL = data.map((e) => e.low).reduce(math.min);
+              double maxV = data.map((e) => e.volume).reduce(math.max);
               double priceRange = maxH - minL;
 
               Paint upPaint = Paint()..color = const Color(0xFFef5350)..style = PaintingStyle.fill;
@@ -321,38 +360,35 @@ jobs:
               List<Offset> ma1Points = [];
               List<Offset> ma2Points = [];
 
-              // 【核心修復】改用純指針高階迭代，彻底移除可能引發 Linux 快取干擾的 [i] 語法
               int index = 0;
               for (var item in data) {
                 double x = index * widthPerBar + (widthPerBar / 2);
                 double barW = widthPerBar * 0.7;
 
                 double getY(double p) => kHeight - ((p - minL) / priceRange * (kHeight - 30) + 15);
-                double oY = getY(item['open']);
-                double cY = getY(item['close']);
-                double hY = getY(item['high']);
-                double lY = getY(item['low']);
+                double oY = getY(item.open);
+                double cY = getY(item.close);
+                double hY = getY(item.high);
+                double lY = getY(item.low);
 
-                Paint barPaint = item['close'] >= item['open'] ? upPaint : downPaint;
+                Paint barPaint = item.close >= item.open ? upPaint : downPaint;
                 canvas.drawLine(Offset(x, hY), Offset(x, lY), Paint()..color = barPaint.color..strokeWidth = 1.2);
                 canvas.drawRect(Rect.fromLTRB(x - barW/2, math.min(oY, cY), x + barW/2, math.max(oY, cY)), barPaint);
 
-                double vH = (item['volume'] / maxV) * (size.height * 0.20);
+                double vH = (item.volume / maxV) * (size.height * 0.20);
                 canvas.drawRect(Rect.fromLTRB(x - barW/2, size.height - vH, x + barW/2, size.height), barPaint);
 
                 if (index >= ma1 - 1) {
                   double sum = 0; 
                   for (int j = 0; j < ma1; j++) { 
-                    var histItem = data.elementAt(index - j);
-                    sum += histItem['close']; 
+                    sum += data.elementAt(index - j).close; 
                   }
                   ma1Points.add(Offset(x, getY(sum / ma1)));
                 }
                 if (index >= ma2 - 1) {
                   double sum = 0; 
                   for (int j = 0; j < ma2; j++) { 
-                    var histItem = data.elementAt(index - j);
-                    sum += histItem['close']; 
+                    sum += data.elementAt(index - j).close; 
                   }
                   ma2Points.add(Offset(x, getY(sum / ma2)));
                 }
@@ -432,7 +468,6 @@ jobs:
 
             @override
             void paint(Canvas canvas, Size size) {
-              // 【核心修復】畫線同樣採 for-in 遍歷，100% 繞過中括號的指令衝突
               for (var line in savedLines) {
                 _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
               }
@@ -446,7 +481,7 @@ jobs:
           }
           EOF
 
-          # 3. 覆寫配置文件 pubspec.yaml
+          # 2. 建立標準配置文件 pubspec.yaml
           cat << "EOF" > pubspec.yaml
           name: taiwan_stock_app
           description: A professional Taiwan Stock Chart App.
@@ -460,6 +495,10 @@ jobs:
           flutter:
             uses-material-design: true
           EOF
+
+          # 3. 網絡與明文流量白名單全面放行
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"\/>' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
       - name: Install dependencies
         run: flutter pub get
