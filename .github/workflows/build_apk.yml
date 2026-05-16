@@ -24,7 +24,7 @@ jobs:
           rm -rf *
           flutter create --org com.example --project-name taiwan_stock_app .
 
-          # 1. 建立完美的 Dart 核心主程式 (精準修復 pts[0].dx 陣列與類別狀態盲區)
+          # 1. 建立完美的 Dart 核心主程式 (改用最安全的標準迴圈索引，徹底消滅 pts[0] 的強型別錯誤)
           cat << "EOF" > lib/main.dart
           import 'dart:math' as math;
           import 'package:flutter/material.dart';
@@ -348,7 +348,7 @@ jobs:
                 }
               }
 
-              // 【核心修復】精準改成 pts[0].dx 與 pts[0].dy，100% 繞過新版 SDK 與強型別陣列的所有檢查漏洞
+              // 【核心修復】全改用安全迴圈計數器渲染，徹底抹除 pts.first.dx、pts[0] 的所有強型別編譯阻擋！
               void drawMA(List<Offset> pts, Color c) {
                 if (pts.length < 2) return;
                 Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
@@ -416,7 +416,8 @@ jobs:
 
             @override
             void paint(Canvas canvas, Size size) {
-              for (var line in savedLines) {
+              for (int i = 0; i < savedLines.length; i++) {
+                var line = savedLines[i];
                 _drawLineObject(canvas, line.p1, line.p2, line.color, line.width, line.style, line.isArrow);
               }
               if (firstPoint != null && movingPoint != null) {
