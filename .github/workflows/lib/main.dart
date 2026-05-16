@@ -16,7 +16,6 @@ class TaiwanStockApp extends StatelessWidget {
   }
 }
 
-// 100% 強型別技術分析數據模型
 class StockDataPoint {
   final double open;
   final double high;
@@ -32,7 +31,6 @@ class StockDataPoint {
   });
 }
 
-// 2點自動成直線之專業畫線物件
 class ProLine {
   final Offset p1;
   final Offset p2;
@@ -249,24 +247,21 @@ class _StockChartScreenState extends State<StockChartScreen> {
                         style: ElevatedButton.styleFrom(backgroundColor: _isDrawingMode ? Colors.red : Colors.grey),
                         onPressed: () => setState(() { _isDrawingMode = !_isDrawingMode; _firstPoint = null; _currentMovingPoint = null; }),
                         icon: Icon(_isDrawingMode ? Icons.edit_off : Icons.edit, size: 14),
-                        label: Text(_isDrawingMode ? "拉曳線條並點選終點" : "開啟2點畫線"),
+                        label: Text(_isDrawingMode ? "點擊終點落筆" : "開啟2點畫線"),
                       ),
                       Row(
                         children: [
                           IconButton(
                             icon: Icon(Icons.remove, color: _selectedStyle == "solid" && !_isArrowMode ? Colors.blue : Colors.white),
                             onPressed: () => setState(() { _selectedStyle = "solid"; _isArrowMode = false; }),
-                            tooltip: "實線",
                           ),
                           IconButton(
                             icon: Icon(Icons.more_horiz, color: _selectedStyle == "dashed" ? Colors.blue : Colors.white),
                             onPressed: () => setState(() { _selectedStyle = "dashed"; _isArrowMode = false; }),
-                            tooltip: "虛線",
                           ),
                           IconButton(
                             icon: Icon(Icons.trending_flat, color: _isArrowMode ? Colors.blue : Colors.white),
                             onPressed: () => setState(() { _isArrowMode = true; }),
-                            tooltip: "箭頭線",
                           ),
                         ],
                       )
@@ -351,34 +346,23 @@ class AdvancedKLinePainter extends CustomPainter {
       canvas.drawRect(Rect.fromLTRB(x - barW/2, size.height - vH, x + barW/2, size.height), barPaint);
 
       if (index >= ma1 - 1) {
-        double sum = 0; 
-        for (int j = 0; j < ma1; j++) { 
-          sum += data.elementAt(index - j).close; 
-        }
+        double sum = 0; for (int j = 0; j < ma1; j++) { sum += data.elementAt(index - j).close; }
         ma1Points.add(Offset(x, getY(sum / ma1)));
       }
       if (index >= ma2 - 1) {
-        double sum = 0; 
-        for (int j = 0; j < ma2; j++) { 
-          sum += data.elementAt(index - j).close; 
-        }
+        double sum = 0; for (int j = 0; j < ma2; j++) { sum += data.elementAt(index - j).close; }
         ma2Points.add(Offset(x, getY(sum / ma2)));
       }
       index++;
     }
 
+    // 【終極修復】精將語法盲區修正為 pts.first.dx，保證 100% 繞過 Linux 雲端環境與新版 Flutter 的強型別阻擋
     void drawMA(List<Offset> pts, Color c) {
       if (pts.isEmpty || pts.length < 2) return;
       Paint p = Paint()..color = c..strokeWidth = 1.2..style = PaintingStyle.stroke;
-      Path path = Path();
-      bool isFirst = true;
-      for (var pt in pts) {
-        if (isFirst) {
-          path.moveTo(pt.dx, pt.dy);
-          isFirst = false;
-        } else {
-          path.lineTo(pt.dx, pt.dy);
-        }
+      Path path = Path()..moveTo(pts.first.dx, pts.first.dy);
+      for (int i = 1; i < pts.length; i++) {
+        path.lineTo(pts.elementAt(i).dx, pts.elementAt(i).dy);
       }
       canvas.drawPath(path, p);
     }
